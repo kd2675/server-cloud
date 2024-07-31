@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPriod="10 seconds">
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <statusListener class="com.example.cloud.common.logback.PrintOnlyWarningLogbackStatusListener"/>
+
+    <!--springProfile 태그를 사용하면 logback 설정파일에서 복수개의 프로파일을 설정할 수 있다.-->
+    <springProfile name="local">
+        <property resource="logback-local.properties"/>
+    </springProfile>
+    <springProfile name="test">
+        <property resource="logback-test.properties"/>
+    </springProfile>
+    <springProfile name="dev">
+        <property resource="logback-dev.properties"/>
+    </springProfile>
+    <springProfile name="prod">
+        <property resource="logback-prod.properties"/>
+    </springProfile>
+    <!--Environment 내의 프로퍼티들을 개별적으로 설정할 수도 있다.-->
+
+    <property name="LOG_PATH" value="${log.config.path}"/>
+    <property name="LOG_APP_ERROR_FILE" value="${LOG_PATH}/${log.config.app.error.name}"/>
+    <property name="LOG_APP_WARN_FILE" value="${LOG_PATH}/${log.config.app.warn.name}"/>
+    <property name="LOG_SQL_ERROR_FILE" value="${LOG_PATH}/${log.config.sql.error.name}"/>
+    <property name="LOG_SQL_TRACE_FILE" value="${LOG_PATH}/${log.config.sql.trace.name}"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>[%thread]%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">-->
+    <!--    <destination>ec2_logstash_url:5000</destination>-->
+    <!--        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">-->
+    <!--            <pattern>[%thread]%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>-->
+    <!--        </encoder>-->
+    <!--    </appender>-->
+
+    <appender name="APP_ERROR_APPENDER"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_APP_ERROR_FILE}.%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>300MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="APP_WARN_APPENDER"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>WARN</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_APP_WARN_FILE}.%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="SQL_ERROR_APPENDER"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_SQL_ERROR_FILE}.%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>300MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="SQL_TRACE_APPENDER"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="com.example.cloud.common.logback.filter.CustomLogbackFilter">
+            <levels>TRACE|DEBUG|INFO|WARN</levels>
+        </filter>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_SQL_TRACE_FILE}.%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <logger name="org.springframework.context.support.PostProcessorRegistrationDelegate$BeanPostProcessorChecker"
+            level="ERROR"/>
+
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="APP_ERROR_APPENDER"/>
+            <appender-ref ref="APP_WARN_APPENDER"/>
+        </root>
+
+<!--        <logger name="com.example" level="TRACE" additivity="false">-->
+<!--            <appender-ref ref="LOGSTASH" />-->
+<!--        </logger>-->
+
+        <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.type" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+        </logger>
+    </springProfile>
+
+    <springProfile name="test">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="dev">
+        <root level="INFO">
+            <appender-ref ref="APP_WARN_APPENDER"/>
+            <appender-ref ref="APP_ERROR_APPENDER"/>
+        </root>
+
+        <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.type" level="INFO" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="APP_WARN_APPENDER"/>
+            <appender-ref ref="APP_ERROR_APPENDER"/>
+        </root>
+
+        <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+
+        <logger name="org.hibernate.type" level="INFO" additivity="false">
+            <appender-ref ref="SQL_TRACE_APPENDER"/>
+            <appender-ref ref="SQL_ERROR_APPENDER"/>
+        </logger>
+    </springProfile>
+</configuration>
+

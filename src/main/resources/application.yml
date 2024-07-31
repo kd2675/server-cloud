@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: cocoin
+  profiles:
+    active: local
+    group:
+      local: local
+      test: test
+      dev: dev
+      prod: prod
+  devtools:
+    livereload:
+      enabled: false
+    restart:
+      enabled: false
+      log-condition-evaluation-delta: false
+  jpa:
+#    database: mysql
+#    database-platform: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+#    properties:
+#      hibernate:
+#        dialect: org.hibernate.dialect.MySQLDialect
+  servlet:
+    multipart:
+      maxFileSize: 100MB
+      maxRequestSize: 100MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      FAIL_ON_EMPTY_BEANS: false
+      WRITE_DATES_AS_TIMESTAMPS: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+    jpa:
+      repositories:
+        enabled: false
+
+server:
+  tomcat:
+    use-relative-redirects: true
+    uri-encoding: UTF-8
+  servlet:
+    session:
+      timeout: 86400
+
+jwt:
+  secret: testtesttesttesttsttesttesttesttest

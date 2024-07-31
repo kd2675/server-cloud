@@ -1,0 +1,104 @@
+server:
+  port: 20190
+
+spring:
+  config:
+    activate:
+      on-profile: local
+  data:
+    redis:
+      port: 26379
+      host: kimd0.iptime.org
+  session:
+    store-type: redis
+
+rootPath: C:\\
+rootImagePath: C:\\image
+
+database:
+  datasource:
+    pub:
+      master:
+        url: jdbc:mysql://kimd0.iptime.org:23306/REP?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+      slave1:
+        url: jdbc:mysql://kimd0.iptime.org:23306/REP?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+    log:
+      master:
+        url: jdbc:mysql://kimd0.iptime.org:23306/LOG?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+      slave1:
+        url: jdbc:mysql://kimd0.iptime.org:23306/LOG?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+    cocoin:
+      master:
+        url: jdbc:mysql://kimd0.iptime.org:23306/REP?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+      slave1:
+        url: jdbc:mysql://kimd0.iptime.org:23306/REP?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+    mattermost:
+      master:
+        url: jdbc:mysql://kimd0.iptime.org:23306/CRAWLING?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+      slave1:
+        url: jdbc:mysql://kimd0.iptime.org:23306/CRAWLING?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+    coin:
+      master:
+        url: jdbc:mysql://kimd0.iptime.org:23306/CRAWLING?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000
+      slave1:
+        url: jdbc:mysql://kimd0.iptime.org:23306/CRAWLING?zeroDateTimeBehavior=convertToNull&useLegacyDatetimeCode=false&serverTimezone=Asia/Seoul&noAccessToProcedureBodies=true&useSSL=false&allowPublicKeyRetrieval=true
+        username: root
+        password: 1234
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 8
+        connection-timeout: 30000
+        maxLifetime: 1800000

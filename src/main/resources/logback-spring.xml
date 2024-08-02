@@ -3,7 +3,7 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-    <statusListener class="com.example.cloud.common.logback.PrintOnlyWarningLogbackStatusListener"/>
+    <statusListener class="org.example.core.logback.PrintOnlyWarningLogbackStatusListener"/>
 
     <!--springProfile 태그를 사용하면 logback 설정파일에서 복수개의 프로파일을 설정할 수 있다.-->
     <springProfile name="local">
@@ -98,7 +98,7 @@
 
     <appender name="SQL_TRACE_APPENDER"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <filter class="com.example.cloud.common.logback.filter.CustomLogbackFilter">
+        <filter class="org.example.core.logback.filter.CustomLogbackFilter">
             <levels>TRACE|DEBUG|INFO|WARN</levels>
         </filter>
         <encoder>

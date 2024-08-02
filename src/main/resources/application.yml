@@ -1,6 +1,6 @@
 spring:
   application:
-    name: cocoin
+    name: cloud
   profiles:
     active: local
     group:

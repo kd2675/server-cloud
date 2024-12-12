@@ -1,4 +1,31 @@
+management.health.circuitbreakers.enabled: true
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      registerHealthIndicator: true
+
+management:
+  endpoint:
+    health:
+      showDetails: always
+    web:
+      exposure:
+        include: "*"
+      expose: "*"
+    metrics:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+  metrics:
+    enable:
+      resilience4j:
+        circuitbreaker:
+          calls: true
+
 spring:
+  main:
+    web-application-type: reactive
   application:
     name: cloud
   profiles:

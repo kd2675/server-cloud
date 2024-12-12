@@ -15,6 +15,13 @@ spring:
 rootPath: C:\\
 rootImagePath: C:\\image
 
+server.url.member: http://localhost:20260
+server.url.ws: http://localhost:20270
+server.url.file: http://localhost:20280
+server.url.batch: http://localhost:20290
+
+server.url.cocoin: http://localhost:20190
+
 database:
   datasource:
     pub:

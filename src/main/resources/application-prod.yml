@@ -1,5 +1,11 @@
 server:
   port: 10200
+  url:
+    batch: http://kimd0.iptime.org:10260
+    file: http://kimd0.iptime.org:10270
+    ws: http://kimd0.iptime.org:10280
+    member: http://kimd0.iptime.org:10290
+    cocoin: http://kimd0.iptime.org:10190
 
 spring:
   config:
@@ -14,13 +20,6 @@ spring:
 
 rootPath: C:\\
 rootImagePath: C:\\image
-
-server.url.member: http://kimd0.iptime.org:10260
-server.url.ws: http://kimd0.iptime.org:10270
-server.url.file: http://kimd0.iptime.org:10280
-server.url.batch: http://kimd0.iptime.org:10290
-
-server.url.cocoin: http://kimd0.iptime.org:10190
 
 database:
   datasource:

@@ -1,27 +1,11 @@
-management.health.circuitbreakers.enabled: true
-resilience4j.circuitbreaker:
-  configs:
-    default:
-      registerHealthIndicator: true
-
 management:
-  endpoint:
-    health:
-      showDetails: always
+  endpoints:
     web:
       exposure:
         include: "*"
-      expose: "*"
-    metrics:
-      enabled: true
-  health:
-    circuitbreakers:
-      enabled: true
-  metrics:
-    enable:
-      resilience4j:
-        circuitbreaker:
-          calls: true
+  endpoint:
+    health:
+      show-details: always
 
 spring:
   main:

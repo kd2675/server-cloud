@@ -14,14 +14,18 @@ ext {
 }
 
 dependencies {
+    // Spring WebFlux
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
-//    implementation 'org.springframework.boot:spring-boot-starter-security'
 
-//    implementation 'org.springframework.cloud:spring-cloud-starter'
-    implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
-//    implementation 'org.springframework.cloud:spring-cloud-starter-gateway-mvc'
-    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    // Resilience4J Actuator (메트릭 및 상태 확인용)
     implementation "org.springframework.boot:spring-boot-starter-actuator"
+
+    // Spring Cloud Gateway (비동기 Circuit Breaker 통합)
+    implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+
+    // Spring Cloud Circuit Breaker Resilience4J 통합
+    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'
 
     implementation group: 'io.jsonwebtoken', name: 'jjwt-impl', version: '0.11.2'
     implementation group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.11.2'
@@ -32,6 +36,7 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
 }
 
 dependencyManagement {

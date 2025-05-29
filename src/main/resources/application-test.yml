@@ -1,5 +1,11 @@
 server:
   port: 30200
+  url:
+    batch: http://localhost:20290
+    file: http://localhost:20280
+    ws: http://localhost:20270
+    member: http://localhost:20260
+    cocoin: http://localhost:20190
 
 spring:
   config:

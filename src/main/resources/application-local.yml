@@ -1,5 +1,11 @@
 server:
   port: 20200
+  url:
+    batch: http://localhost:20290
+    file: http://localhost:20280
+    ws: http://localhost:20270
+    member: http://localhost:20260
+    cocoin: http://localhost:20190
 
 spring:
   config:
@@ -14,13 +20,6 @@ spring:
 
 rootPath: C:\\
 rootImagePath: C:\\image
-
-server.url.member: http://localhost:20260
-server.url.ws: http://localhost:20270
-server.url.file: http://localhost:20280
-server.url.batch: http://localhost:20290
-
-server.url.cocoin: http://localhost:20190
 
 database:
   datasource:

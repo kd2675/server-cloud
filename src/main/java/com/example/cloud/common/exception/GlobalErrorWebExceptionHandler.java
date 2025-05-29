@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.web.reactive.error.AbstractErrorWe
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.web.reactive.error.DefaultErrorAttributes;
 import org.springframework.boot.web.reactive.error.ErrorAttributes;
+import org.springframework.cloud.gateway.filter.factory.SpringCloudCircuitBreakerFilterFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -40,7 +41,6 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
         Map<String, Object> errorPropertiesMap = getErrorAttributes(request, ErrorAttributeOptions.defaults());
         Throwable error = getError(request);
 
-
         if (error instanceof GeneralException error1) {
             log.error(error.getMessage(), error);
 
@@ -51,9 +51,18 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
             return ServerResponse.status(error1.getErrorCode().getHttpStatus())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(BodyInserters.fromValue(errorPropertiesMap));
+        } else if (error instanceof SpringCloudCircuitBreakerFilterFactory.CircuitBreakerStatusCodeException error2) {
+            //fallback
+            errorPropertiesMap.put("success", false);
+            errorPropertiesMap.put("code", error2.getStatusCode().value());
+            errorPropertiesMap.put("message", "통신 서버 에러");
+
+            return ServerResponse.status(error2.getStatusCode())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(BodyInserters.fromValue(errorPropertiesMap));
         } else {
             errorPropertiesMap.put("success", false);
-            errorPropertiesMap.put("code", 500);
+            errorPropertiesMap.put("code", 503);
             errorPropertiesMap.put("message", "클라우드 서버와 통신 문제");
         }
 

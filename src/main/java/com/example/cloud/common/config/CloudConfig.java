@@ -156,7 +156,25 @@ public class CloudConfig {
                                                 .setRequestHeader("Auth-header", "second")
                                 )
                                 .uri(serverUrlCocoin)
-                ).build();
+                )// service-batch로 라우팅
+                .route("service-batch", r -> r
+                        .path("/service/batch/**")
+                        .filters(f -> f
+                                .addRequestHeader("X-Gateway", "server-cloud")
+                                .addResponseHeader("X-Response-Time", String.valueOf(System.currentTimeMillis()))
+                                .circuitBreaker(config -> config
+                                        .setName("service-batch-cb")
+                                        .setFallbackUri("forward:/fallback/batch"))
+                        )
+                        .uri("http://service-batch:8082"))
+
+                // server-batch 모니터링 라우팅
+                .route("server-batch", r -> r
+                        .path("/service/schedule/**")
+                        .uri("http://server-batch:8081"))
+
+
+                .build();
 //        return route("common-route")
 //                .route(
 //                        GatewayRequestPredicates.path("/ws/"),

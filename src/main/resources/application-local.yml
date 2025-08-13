@@ -6,6 +6,8 @@ server:
     ws: http://localhost:20270
     member: http://localhost:20260
     cocoin: http://localhost:20190
+    service:
+      batch: http://localhost:20180
 
 spring:
   config:

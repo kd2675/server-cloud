@@ -59,6 +59,9 @@ public class CloudConfig {
     @Value("${server.url.cocoin}")
     private String serverUrlCocoin;
 
+    @Value("${server.url.service.batch}")
+    private String serverUrlServiceBatch;
+
     private final HeaderFilter headerFilter;
     private final PreLoggingFilter preLoggingFilter;
     private final AuthorizationTokenFilter authorizationTokenFilter;
@@ -125,14 +128,14 @@ public class CloudConfig {
                         )
                         .uri(serverUrlBatch)
                 ).route(r -> r.path("/member/**")
-                                .filters(
-                                        f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
-                                                .filter(headerFilter.apply(new HeaderFilter.Config()))
-                                                .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
-                                                .setRequestHeader("Auth-header", "second")
+                        .filters(
+                                f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                        .filter(headerFilter.apply(new HeaderFilter.Config()))
+                                        .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                                        .setRequestHeader("Auth-header", "second")
 //                                                .circuitBreaker(c -> c.setName("circuitBreaker"))
-                                )
-                                .uri(serverUrlMember)
+                        )
+                        .uri(serverUrlMember)
                 ).route(r -> r.path("/cocoin/ctf/**")
                         .filters(
                                 f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
@@ -146,33 +149,27 @@ public class CloudConfig {
                         )
                         .uri(serverUrlCocoin)
                 ).route(r -> r.path("/cocoin/**")
-                                .filters(
-                                        f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
-//                                                .circuitBreaker(c -> c.setName("circuitBreaker"))
-                                                .filter(headerFilter.apply(new HeaderFilter.Config()))
-                                                .filter(authorizationTokenFilter.apply(new AuthorizationTokenFilter.Config()))
-                                                .filter(authorizationHeaderFilter.apply(new AuthorizationHeaderFilter.Config()))
-                                                .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
-                                                .setRequestHeader("Auth-header", "second")
-                                )
-                                .uri(serverUrlCocoin)
-                )// service-batch로 라우팅
-                .route("service-batch", r -> r
-                        .path("/service/batch/**")
-                        .filters(f -> f
-                                .addRequestHeader("X-Gateway", "server-cloud")
-                                .addResponseHeader("X-Response-Time", String.valueOf(System.currentTimeMillis()))
-                                .circuitBreaker(config -> config
-                                        .setName("service-batch-cb")
-                                        .setFallbackUri("forward:/fallback/batch"))
+                        .filters(
+                                f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                        .filter(headerFilter.apply(new HeaderFilter.Config()))
+                                        .filter(authorizationTokenFilter.apply(new AuthorizationTokenFilter.Config()))
+                                        .filter(authorizationHeaderFilter.apply(new AuthorizationHeaderFilter.Config()))
+                                        .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                                        .circuitBreaker(
+                                                c -> c.setName("myCircuitBreaker")
+                                                        .setStatusCodes(fallbackStatusCodes)
+                                        )
+                                        .setRequestHeader("Auth-header", "second")
                         )
-                        .uri("http://service-batch:8082"))
-
-                // server-batch 모니터링 라우팅
-                .route("server-batch", r -> r
-                        .path("/service/schedule/**")
-                        .uri("http://server-batch:8081"))
-
+                        .uri(serverUrlCocoin)
+                ).route(r -> r.path("/service/batch/**")
+                        .filters(
+                                f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                        .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                                        .setRequestHeader("Auth-header", "second")
+                        )
+                        .uri(serverUrlServiceBatch)
+                )
 
                 .build();
 //        return route("common-route")

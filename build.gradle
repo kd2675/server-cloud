@@ -14,20 +14,29 @@ ext {
 }
 
 dependencies {
-    // Spring WebFlux
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-
-    implementation 'org.springframework.boot:spring-boot-starter-aop'
-    // Resilience4J Actuator (메트릭 및 상태 확인용)
-    implementation "org.springframework.boot:spring-boot-starter-actuator"
-
     // Spring Cloud Gateway (비동기 Circuit Breaker 통합)
+    // Spring WebFlux
+    // Resilience4J Actuator (메트릭 및 상태 확인용)
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+//    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
+//    implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
 
     // Spring Cloud Circuit Breaker Resilience4J 통합
     implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'
 
-//    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // JSON Processing
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
 
     implementation group: 'io.jsonwebtoken', name: 'jjwt-impl', version: '0.11.2'
     implementation group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.11.2'

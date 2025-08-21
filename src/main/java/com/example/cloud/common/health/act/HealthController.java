@@ -208,7 +208,7 @@ public class HealthController implements HealthIndicator {
                 .get()
                 .uri(url)
                 .retrieve()
-                .bodyToMono(Map.class)
+                .bodyToMono(String.class)
                 .timeout(java.time.Duration.ofSeconds(5))
                 .map(response -> {
                     Map<String, Object> serviceHealth = new HashMap<>();

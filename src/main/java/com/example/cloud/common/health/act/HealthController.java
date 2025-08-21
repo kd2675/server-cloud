@@ -188,7 +188,7 @@ public class HealthController implements HealthIndicator {
         Map<String, Object> result = new HashMap<>();
         
         Mono<Map<String, Object>> memberCheck = checkService("member", serverUrlMember + "/actuator/health");
-        Mono<Map<String, Object>> batchCheck = checkService("batch", serverUrlBatch + "/actuator/health");
+        Mono<Map<String, Object>> batchCheck = checkService("batch", serverUrlBatch + "/service/batch/health");
         Mono<Map<String, Object>> cocoinCheck = checkService("cocoin", serverUrlCocoin + "/actuator/health");
 
         return Mono.zip(memberCheck, batchCheck, cocoinCheck)

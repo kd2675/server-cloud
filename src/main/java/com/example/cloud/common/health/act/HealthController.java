@@ -13,13 +13,13 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/health")
+@RequestMapping("/server/cloud/health")
 public class HealthController {
     private int count = 0;
 
-    @GetMapping()
-    public ResponseEntity<String> checkEndpoint() {
-        return ResponseEntity.ok("Internal check endpoint is working!");
+    @GetMapping
+    public ResponseDTO checkEndpoint() {
+        return ResponseDTO.of(true, Code.OK);
     }
 
 //    @GetMapping("/circuit")

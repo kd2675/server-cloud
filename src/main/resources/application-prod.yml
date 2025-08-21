@@ -6,6 +6,8 @@ server:
     ws: http://kimd0.iptime.org:10280
     member: http://kimd0.iptime.org:10290
     cocoin: http://kimd0.iptime.org:10190
+    service:
+      batch: http://kimd0.iptime.org:10180
 
 spring:
   config:

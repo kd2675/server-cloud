@@ -30,8 +30,8 @@ public class HealthController implements HealthIndicator {
     @Value("${server.url.member}")
     private String serverUrlMember;
     
-    @Value("${server.url.batch}")
-    private String serverUrlBatch;
+    @Value("${server.url.service.batch}")
+    private String serverUrlServiceBatch;
     
     @Value("${server.url.cocoin}")
     private String serverUrlCocoin;
@@ -188,7 +188,7 @@ public class HealthController implements HealthIndicator {
         Map<String, Object> result = new HashMap<>();
         
         Mono<Map<String, Object>> memberCheck = checkService("member", serverUrlMember + "/actuator/health");
-        Mono<Map<String, Object>> batchCheck = checkService("batch", serverUrlBatch + "/service/batch/health");
+        Mono<Map<String, Object>> batchCheck = checkService("batch", serverUrlServiceBatch + "/service/batch/health");
         Mono<Map<String, Object>> cocoinCheck = checkService("cocoin", serverUrlCocoin + "/actuator/health");
 
         return Mono.zip(memberCheck, batchCheck, cocoinCheck)

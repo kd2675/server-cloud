@@ -1,6 +1,7 @@
 server:
   port: 10200
   url:
+    cloud: http://kimd0.iptime.org:10200
     batch: http://kimd0.iptime.org:10260
     file: http://kimd0.iptime.org:10270
     ws: http://kimd0.iptime.org:10280

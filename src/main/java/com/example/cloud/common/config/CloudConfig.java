@@ -53,6 +53,9 @@ public class CloudConfig {
     @Value("${server.url.file}")
     private String serverUrlFile;
 
+    @Value("${server.url.cloud}")
+    private String serverUrlCloud;
+
     @Value("${server.url.batch}")
     private String serverUrlBatch;
 
@@ -105,9 +108,10 @@ public class CloudConfig {
         }
 
         return builder.routes()
-                .route("health", r -> r.path("/test/**")
+                .route("health", r -> r.path("/test/circuit")
                         .filters(
-                                f -> f.setPath("/health/circuit")
+                                f -> f.setPath("/server/cloud/health/circuit")
+                                        .setRequestHeader("Auth-header", "cloud")
                                         .circuitBreaker(
                                                 c -> c.setName("myCircuitBreaker")
                                                         .setStatusCodes(fallbackStatusCodes)
@@ -116,7 +120,7 @@ public class CloudConfig {
                                         .filter(headerFilter.apply(new HeaderFilter.Config()))
                                         .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
                         )
-                        .uri("http://localhost:20200")
+                        .uri(serverUrlCloud)
                 ).route(r -> r.path("/file/**")
                         .filters(
                                 f -> f.setRequestHeader("Auth-header", "second")

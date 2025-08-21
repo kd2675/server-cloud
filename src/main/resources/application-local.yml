@@ -1,6 +1,7 @@
 server:
   port: 20200
   url:
+    cloud: http://localhost:20200
     batch: http://localhost:20290
     file: http://localhost:20280
     ws: http://localhost:20270

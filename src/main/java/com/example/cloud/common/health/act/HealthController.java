@@ -43,7 +43,7 @@ public class HealthController implements HealthIndicator {
     /**
      * 기본 헬스체크 - Gateway 자체 상태
      */
-    @GetMapping
+    @RequestMapping
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> status = new HashMap<>();
         status.put("status", "UP");

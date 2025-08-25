@@ -1,11 +1,11 @@
 # 🌩️ Server-Cloud
-Second 프로젝트의 Spring Cloud Gateway 기반 API 게이트웨이 서버.
+Second 프로젝트의 Spring Cloud Gateway 기반 API 게이트웨이 서버
 리액티브 프로그래밍 모델을 사용하여 마이크로서비스 간의 통신을 중계
 
 ## 📖 프로젝트 개요
-Server-Cloud는 Spring Cloud Gateway를 기반으로 한 리액티브 API 게이트웨이.
-WebFlux를 사용한 비동기 논블로킹 방식으로 높은 성능을 제공하며,
-Resilience4J를 통한 Circuit Breaker 패턴과 JWT 기반 인증을 지원.
+Server-Cloud는 Spring Cloud Gateway를 기반으로 한 리액티브 API 게이트웨이
+WebFlux를 사용한 비동기 논블로킹 방식으로 높은 성능을 제공
+Resilience4J를 통한 Circuit Breaker 패턴과 JWT 기반 인증을 지원
 
 ## 🎯 주요 기능
 - **API 게이트웨이**: 마이크로서비스 간 통신 중계 및 라우팅

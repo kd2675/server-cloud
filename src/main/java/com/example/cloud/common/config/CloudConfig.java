@@ -65,6 +65,10 @@ public class CloudConfig {
     @Value("${server.url.service.batch}")
     private String serverUrlServiceBatch;
 
+    // LoadBalancer용 URI 추가
+    private static final String LOAD_BALANCED_URI = "lb://service-batch";
+
+
     private final HeaderFilter headerFilter;
     private final PreLoggingFilter preLoggingFilter;
     private final AuthorizationTokenFilter authorizationTokenFilter;
@@ -166,13 +170,32 @@ public class CloudConfig {
                                         .setRequestHeader("Auth-header", "second")
                         )
                         .uri(serverUrlCocoin)
-                ).route(r -> r.path("/service/batch/**")
-                        .filters(
-                                f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
-                                        .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
-                                        .setRequestHeader("Auth-header", "second")
+                )
+//                .route(r -> r.path("/service/batch/**")
+//                        .filters(
+//                                f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+//                                        .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+//                                        .setRequestHeader("Auth-header", "second")
+//                        )
+//                        .uri(serverUrlServiceBatch)
+//                )
+                .route("service-batch-loadbalanced", r -> r.path("/service/batch/**")
+                        .filters(f -> f
+                                .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                                .setRequestHeader("Auth-header", "second")
+                                .circuitBreaker(c -> c
+                                        .setName("serviceBatchCircuitBreaker")
+                                        .setStatusCodes(fallbackStatusCodes)
+                                        .setFallbackUri("forward:/fallback/service-batch")
+                                )
+                                .retry(retryConfig -> retryConfig
+                                        .setRetries(3)
+                                        .setMethods(HttpMethod.GET, HttpMethod.POST)
+                                        .setSeries(HttpStatus.Series.SERVER_ERROR)
+                                )
                         )
-                        .uri(serverUrlServiceBatch)
+                        .uri(LOAD_BALANCED_URI) // 로드밸런서 URI 사용
                 )
 
                 .build();

@@ -28,21 +28,11 @@ Resilience4J를 통한 Circuit Breaker 패턴과 JWT 기반 인증을 지원
 - **라우팅 관리**: 동적 라우팅 및 필터 체인 관리
 - **AOP**: 관점 지향 프로그래밍을 통한 횡단 관심사 처리
 
-### 리액티브 & 비동기
-- **Project Reactor**: 리액티브 스트림 구현체
-- **Spring Data Redis Reactive**: 비동기 Redis 연동
-- **Netty**: 논블로킹 I/O 서버
-
 ### 보안 & 인증
 - **JWT (JSON Web Token)**: 토큰 기반 인증
     - `jjwt-api`: 0.11.2
     - `jjwt-impl`: 0.11.2
     - `jjwt-jackson`: 0.11.2
-
-### 클라우드 & 통신
-- **Feign Client**: 서비스 간 HTTP 통신
-- **Eureka Client**:
-- **Circuit Breaker**: 장애 격리 및 복구
 
 ### 회복성 패턴
 - **Resilience4J**: Circuit Breaker, Retry, Rate Limiter

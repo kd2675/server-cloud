@@ -7,6 +7,20 @@ management:
     health:
       show-details: always
 
+# Resilience4j 설정
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      serviceBatchCircuitBreaker:
+        base-config: default
+
 spring:
   main:
     web-application-type: reactive
@@ -25,6 +39,15 @@ spring:
     restart:
       enabled: false
       log-condition-evaluation-delta: false
+  cloud:
+    gateway:
+      # 로드밸런싱 설정
+      loadbalancer:
+        use404: true
+    loadbalancer:
+      ribbon:
+        enabled: false  # Ribbon 비활성화, Spring Cloud LoadBalancer 사용
+
   jpa:
 #    database: mysql
 #    database-platform: org.hibernate.dialect.MySQLDialect

@@ -13,18 +13,36 @@ import java.time.Duration;
 public class CircuitBreakerConfig {
     @Bean
     public Customizer<ReactiveResilience4JCircuitBreakerFactory> defaultCustomizer() {
-        return factory -> factory.configureDefault(id -> new Resilience4JConfigBuilder("myCircuitBreaker")
-                .circuitBreakerConfig(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.custom()
-                        .slidingWindowSize(10)
-                        .permittedNumberOfCallsInHalfOpenState(3)
-                        .slidingWindowType(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
-                        .minimumNumberOfCalls(5)
-                        .waitDurationInOpenState(Duration.ofSeconds(30))
-                        .failureRateThreshold(50)
-                        .build())
-                .timeLimiterConfig(TimeLimiterConfig.custom()
-                        .timeoutDuration(Duration.ofSeconds(30))
-                        .build())
-                .build());
+        return factory -> {
+            // 기본 설정
+            factory.configureDefault(id -> new Resilience4JConfigBuilder(id)
+                    .circuitBreakerConfig(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.custom()
+                            .slidingWindowSize(10)
+                            .permittedNumberOfCallsInHalfOpenState(3)
+                            .slidingWindowType(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
+                            .minimumNumberOfCalls(5)
+                            .waitDurationInOpenState(Duration.ofSeconds(30))
+                            .failureRateThreshold(50)
+                            .build())
+                    .timeLimiterConfig(TimeLimiterConfig.custom()
+                            .timeoutDuration(Duration.ofSeconds(30))
+                            .build())
+                    .build());
+
+            // serviceBatchCircuitBreaker 전용 설정
+            factory.configure(builder -> builder
+                    .circuitBreakerConfig(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.custom()
+                            .slidingWindowSize(10)
+                            .permittedNumberOfCallsInHalfOpenState(3)
+                            .slidingWindowType(io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
+                            .minimumNumberOfCalls(5)
+                            .waitDurationInOpenState(Duration.ofSeconds(30))
+                            .failureRateThreshold(50)
+                            .build())
+                    .timeLimiterConfig(TimeLimiterConfig.custom()
+                            .timeoutDuration(Duration.ofSeconds(30))
+                            .build())
+                    .build(), "serviceBatchCircuitBreaker");
+        };
     }
 }

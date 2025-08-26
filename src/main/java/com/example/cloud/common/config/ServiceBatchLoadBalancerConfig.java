@@ -12,10 +12,10 @@ import org.springframework.context.annotation.Primary;
 @LoadBalancerClient(name = "service-batch", configuration = ServiceBatchLoadBalancerConfig.class)
 public class ServiceBatchLoadBalancerConfig {
 
-    @Bean
-    @Primary
-    public ServiceInstanceListSupplier serviceBatchInstanceSupplier(ConfigurableApplicationContext context) {
-//        return new ServiceBatchInstanceListSupplier(context);
-        return new DynamicServiceInstanceListSupplier(context);
-    }
+//    @Bean
+//    @Primary
+//    public ServiceInstanceListSupplier serviceBatchInstanceSupplier(ConfigurableApplicationContext context) {
+////        return new ServiceBatchInstanceListSupplier(context);
+//        return new DynamicServiceInstanceListSupplier(context);
+//    }
 }

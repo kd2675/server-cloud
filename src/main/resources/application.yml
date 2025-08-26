@@ -7,20 +7,6 @@ management:
     health:
       show-details: always
 
-# Resilience4j 설정
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-size: 10
-        minimum-number-of-calls: 5
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
-        permitted-number-of-calls-in-half-open-state: 3
-    instances:
-      serviceBatchCircuitBreaker:
-        base-config: default
-
 spring:
   main:
     web-application-type: reactive

@@ -1,6 +1,7 @@
 package com.example.cloud.common.supplier;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -19,6 +20,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSupplier {
+    @Value("${server.host}")
+    private String serverHost;
 
     private final String serviceId = "service-batch";
     private final WebClient webClient;
@@ -31,9 +34,9 @@ public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSu
 
         // 정적 인스턴스 정의
         this.staticInstances = Arrays.asList(
-                new ServiceBatchInstance("service-batch-1", "localhost", 20180),
-                new ServiceBatchInstance("service-batch-2", "localhost", 20181),
-                new ServiceBatchInstance("service-batch-3", "localhost", 20182)
+                new ServiceBatchInstance("service-batch-1", serverHost, 20180),
+                new ServiceBatchInstance("service-batch-2", serverHost, 20181),
+                new ServiceBatchInstance("service-batch-3", serverHost, 20182)
         );
 
         // 주기적 헬스체크 시작

@@ -1,4 +1,5 @@
 server:
+  host: kimd0.iptime.org
   port: 10200
   url:
     cloud: http://kimd0.iptime.org:10200

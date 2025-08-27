@@ -6,6 +6,11 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    defaults:
+      enabled: true
+    redis:
+      enabled: false  # Redis 헬스체크만 비활성화
 
 spring:
   main:

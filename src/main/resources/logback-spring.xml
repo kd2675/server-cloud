@@ -176,6 +176,7 @@
 
     <springProfile name="prod">
         <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="APP_WARN_APPENDER"/>
             <appender-ref ref="APP_ERROR_APPENDER"/>
         </root>

@@ -1,17 +1,3 @@
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"
-  endpoint:
-    health:
-      show-details: always
-  health:
-    defaults:
-      enabled: true
-    redis:
-      enabled: false  # Redis 헬스체크만 비활성화
-
 spring:
   main:
     web-application-type: reactive
@@ -73,3 +59,17 @@ server:
 
 jwt:
   secret: testtesttesttesttsttesttesttesttest
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  health:
+    defaults:
+      enabled: true
+    redis:
+      enabled: false  # Redis 헬스체크만 비활성화

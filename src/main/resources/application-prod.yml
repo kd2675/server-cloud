@@ -1,5 +1,4 @@
 server:
-  host: kimd0.iptime.org
   port: 10200
   url:
     cloud: http://kimd0.iptime.org:10200
@@ -9,6 +8,10 @@ server:
     member: http://kimd0.iptime.org:10290
     cocoin: http://kimd0.iptime.org:10190
     service:
+      host: kimd0.iptime.org
+      port1: 10180
+      port2: 10181
+      port3: 10182
       batch: http://kimd0.iptime.org:10180
 
 spring:

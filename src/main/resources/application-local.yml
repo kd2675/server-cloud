@@ -1,5 +1,4 @@
 server:
-  host: localhost
   port: 20200
   url:
     cloud: http://localhost:20200
@@ -9,6 +8,10 @@ server:
     member: http://localhost:20260
     cocoin: http://localhost:20190
     service:
+      host: localhost
+      port1: 20180
+      port2: 20181
+      port3: 20182
       batch: http://localhost:20180
 
 spring:

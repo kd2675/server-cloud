@@ -20,8 +20,14 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSupplier {
-    @Value("${server.host}")
+    @Value("${server.url.service.host}")
     private String serverHost;
+    @Value("${server.url.service.port1}")
+    private int serverPort1;
+    @Value("${server.url.service.port2}")
+    private int serverPort2;
+    @Value("${server.url.service.port3}")
+    private int serverPort3;
 
     private final String serviceId = "service-batch";
     private final WebClient webClient;
@@ -34,9 +40,9 @@ public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSu
 
         // 정적 인스턴스 정의
         this.staticInstances = Arrays.asList(
-                new ServiceBatchInstance("service-batch-1", serverHost, 20180),
-                new ServiceBatchInstance("service-batch-2", serverHost, 20181),
-                new ServiceBatchInstance("service-batch-3", serverHost, 20182)
+                new ServiceBatchInstance("service-batch-1", serverHost, serverPort1),
+                new ServiceBatchInstance("service-batch-2", serverHost, serverPort2),
+                new ServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
         // 주기적 헬스체크 시작

@@ -20,20 +20,16 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSupplier {
-    @Value("${server.url.service.host}")
-    private String serverHost;
-    @Value("${server.url.service.port1}")
-    private int serverPort1;
-    @Value("${server.url.service.port2}")
-    private int serverPort2;
-    @Value("${server.url.service.port3}")
-    private int serverPort3;
-
     private final String serviceId = "service-batch";
     private final WebClient webClient;
     private final List<ServiceBatchInstance> staticInstances;
 
-    public DynamicServiceInstanceListSupplier(ConfigurableApplicationContext context) {
+    public DynamicServiceInstanceListSupplier(ConfigurableApplicationContext context,
+                                              @Value("${server.url.service.host}") String serverHost,
+                                              @Value("${server.url.service.port1}") int serverPort1,
+                                              @Value("${server.url.service.port2}") int serverPort2,
+                                              @Value("${server.url.service.port3}") int serverPort3
+    ) {
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024))
                 .build();

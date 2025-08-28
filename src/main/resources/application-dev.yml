@@ -1,13 +1,39 @@
 server:
   port: 20200
-  url:
-    batch: http://kimd0.iptime.org:20260
-    file: http://kimd0.iptime.org:20270
-    ws: http://kimd0.iptime.org:20280
-    member: http://kimd0.iptime.org:20290
-    cocoin: http://kimd0.iptime.org:20190
-    service:
-      batch: http://kimd0.iptime.org:20180
+
+path:
+  server:
+    cloud:
+      host: kimd0.iptime.org
+      port: 20200
+      url: http://kimd0.iptime.org:20200
+    batch:
+      host: kimd0.iptime.org
+      port: 20260
+      url: http://kimd0.iptime.org:20260
+    file:
+      host: kimd0.iptime.org
+      port: 20270
+      url: http://kimd0.iptime.org:20270
+    socket:
+      host: kimd0.iptime.org
+      port: 20280
+      url: http://kimd0.iptime.org:20280
+    member:
+      host: kimd0.iptime.org
+      port: 20290
+      url: http://kimd0.iptime.org:20290
+  service:
+    batch:
+      host: kimd0.iptime.org
+      port1: 20180
+      port2: 20181
+      port3: 20182
+      url: http://kimd0.iptime.org:20180
+    cocoin:
+      host: kimd0.iptime.org
+      port: 20190
+      url: http://kimd0.iptime.org:20190
 
 spring:
   config:

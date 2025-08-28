@@ -1,11 +1,40 @@
 server:
   port: 30200
-  url:
-    batch: http://localhost:20290
-    file: http://localhost:20280
-    ws: http://localhost:20270
-    member: http://localhost:20260
-    cocoin: http://localhost:20190
+
+path:
+  server:
+    cloud:
+      host: localhost
+      port: 20200
+      url: http://localhost:20200
+    batch:
+      host: localhost
+      port: 20260
+      url: http://localhost:20260
+    file:
+      host: localhost
+      port: 20270
+      url: http://localhost:20270
+    socket:
+      host: localhost
+      port: 20280
+      url: http://localhost:20280
+    member:
+      host: localhost
+      port: 20290
+      url: http://localhost:20290
+  service:
+    batch:
+      host: localhost
+      port1: 20180
+      port2: 20181
+      port3: 20182
+      url: http://localhost:20180
+    cocoin:
+      host: localhost
+      port: 20190
+      url: http://localhost:20190
+
 
 spring:
   config:

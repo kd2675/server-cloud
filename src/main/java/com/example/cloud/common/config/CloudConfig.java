@@ -3,19 +3,9 @@ package com.example.cloud.common.config;
 //import com.example.cloud.common.config.jwt.provider.JwtTokenProvider;
 
 import com.example.cloud.common.config.filter.*;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.common.circuitbreaker.configuration.CircuitBreakerConfigCustomizer;
-import io.github.resilience4j.timelimiter.TimeLimiterConfig;
 import lombok.RequiredArgsConstructor;
-import org.example.core.response.base.exception.GeneralException;
 import org.example.core.utils.ServerTypeUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.circuitbreaker.resilience4j.ReactiveResilience4JCircuitBreakerFactory;
-import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JConfigBuilder;
-import org.springframework.cloud.client.circuitbreaker.Customizer;
-import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreakerFactory;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
@@ -27,46 +17,41 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.cors.reactive.CorsUtils;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
-import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.function.Predicate;
 
 @Configuration
 @RequiredArgsConstructor
 @ComponentScan(basePackages = {"org.example.core"})
 public class CloudConfig {
-    @Value("${server.url.member}")
+    @Value("${path.server.member.url}")
     private String serverUrlMember;
 
-    @Value("${server.url.ws}")
-    private String serverUrlWs;
+    @Value("${path.server.socket.url}")
+    private String serverUrlSocket;
 
-    @Value("${server.url.file}")
+    @Value("${path.server.file.url}")
     private String serverUrlFile;
 
-    @Value("${server.url.cloud}")
+    @Value("${path.server.cloud.url}")
     private String serverUrlCloud;
 
-    @Value("${server.url.batch}")
+    @Value("${path.server.batch.url}")
     private String serverUrlBatch;
 
-    @Value("${server.url.cocoin}")
+    @Value("${path.service.cocoin.url}")
     private String serverUrlCocoin;
 
-    @Value("${server.url.service.batch}")
+    @Value("${path.service.batch.url}")
     private String serverUrlServiceBatch;
 
     // LoadBalancer용 URI 추가
-    private static final String LOAD_BALANCED_URI = "lb://service-batch";
+    private static final String LOAD_BALANCED_SERVICE_BATCH = "lb://service-batch";
 
 
     private final HeaderFilter headerFilter;
@@ -195,7 +180,7 @@ public class CloudConfig {
                                         .setSeries(HttpStatus.Series.SERVER_ERROR)
                                 )
                         )
-                        .uri(LOAD_BALANCED_URI) // 로드밸런서 URI 사용
+                        .uri(LOAD_BALANCED_SERVICE_BATCH) // 로드밸런서 URI 사용
                 )
 
                 .build();

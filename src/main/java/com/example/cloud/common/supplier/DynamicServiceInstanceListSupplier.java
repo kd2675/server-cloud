@@ -25,10 +25,10 @@ public class DynamicServiceInstanceListSupplier implements ServiceInstanceListSu
     private final List<ServiceBatchInstance> staticInstances;
 
     public DynamicServiceInstanceListSupplier(ConfigurableApplicationContext context,
-                                              @Value("${server.url.service.host}") String serverHost,
-                                              @Value("${server.url.service.port1}") int serverPort1,
-                                              @Value("${server.url.service.port2}") int serverPort2,
-                                              @Value("${server.url.service.port3}") int serverPort3
+                                              @Value("${path.service.batch.host}") String serverHost,
+                                              @Value("${path.service.batch.port1}") int serverPort1,
+                                              @Value("${path.service.batch.port2}") int serverPort2,
+                                              @Value("${path.service.batch.port3}") int serverPort3
     ) {
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024))

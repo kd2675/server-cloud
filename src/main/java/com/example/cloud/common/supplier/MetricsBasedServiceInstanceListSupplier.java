@@ -33,10 +33,10 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                 .build();
 
         // application-local.yml에서 포트 정보 읽기
-        String serverHost = context.getEnvironment().getProperty("server.url.service.host", "localhost");
-        int serverPort1 = context.getEnvironment().getProperty("server.url.service.port1", Integer.class, 20180);
-        int serverPort2 = context.getEnvironment().getProperty("server.url.service.port2", Integer.class, 20181);
-        int serverPort3 = context.getEnvironment().getProperty("server.url.service.port3", Integer.class, 20182);
+        String serverHost = context.getEnvironment().getProperty("path.service.batch.host");
+        int serverPort1 = context.getEnvironment().getProperty("path.service.batch.port1", Integer.class);
+        int serverPort2 = context.getEnvironment().getProperty("path.service.batch.port2", Integer.class);
+        int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
 
         // 정적 인스턴스 정의
         this.staticInstances = Arrays.asList(

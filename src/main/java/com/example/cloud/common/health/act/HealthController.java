@@ -29,13 +29,13 @@ import java.util.Map;
 @Slf4j
 public class HealthController implements HealthIndicator {
     
-    @Value("${server.url.member}")
+    @Value("${path.server.member.url}")
     private String serverUrlMember;
     
-    @Value("${server.url.service.batch}")
+    @Value("${path.service.batch.url}")
     private String serverUrlServiceBatch;
     
-    @Value("${server.url.cocoin}")
+    @Value("${path.service.cocoin.url}")
     private String serverUrlCocoin;
     
     private final WebClient.Builder webClientBuilder;

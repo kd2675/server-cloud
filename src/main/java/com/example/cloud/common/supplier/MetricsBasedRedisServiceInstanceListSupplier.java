@@ -23,11 +23,11 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
     private final String serviceId = "service-batch";
     private final WebClient webClient;
     private final List<LoadBalancedServiceBatchInstance> staticInstances;
-    
+
     // Redis 캐시 사용
     private final ReactiveRedisTemplate<String, Object> reactiveRedisTemplate;
     private final long CACHE_TTL_SECONDS = 30; // 30초 TTL
-    
+
     // Redis 키 패턴
     private static final String METRICS_KEY_PREFIX = "loadbalancer:metrics:";
     private static final String HEALTH_KEY_PREFIX = "loadbalancer:health:";
@@ -35,7 +35,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
     public MetricsBasedRedisServiceInstanceListSupplier(
             ConfigurableApplicationContext context,
             @Autowired(required = false) ReactiveRedisTemplate<String, Object> reactiveRedisTemplate) {
-        
+
         this.reactiveRedisTemplate = reactiveRedisTemplate;
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
@@ -54,7 +54,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                 new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
-        log.info("MetricsBasedLoadBalancer 초기화 완료 (Redis 캐시 활성화: {}) - {}:{}|{}:{}|{}:{}", 
+        log.info("MetricsBasedLoadBalancer 초기화 완료 (Redis 캐시 활성화: {}) - {}:{}|{}:{}|{}:{}",
                 reactiveRedisTemplate != null,
                 serverHost, serverPort1, serverHost, serverPort2, serverHost, serverPort3);
 
@@ -82,58 +82,42 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
     }
 
     /**
-     * 🔥 비동기로 부하점수 기반 정렬
+     * 🔥 비동기로 부하점수 기반 정렬 (Map.Entry 방식 적용)
      */
     private Mono<List<ServiceInstance>> sortInstancesByLoadScoreAsync(List<LoadBalancedServiceBatchInstance> healthyInstances) {
         if (healthyInstances.isEmpty()) {
-            log.warn("건강한 service-batch 인스턴스가 없습니다.");
+            log.warn("건강한 service-batch 인스턴스가 없습니다. fallback 인스턴스를 반환합니다.");
             return Mono.just(getFallbackInstances());
         }
 
-        // 각 인스턴스의 부하점수를 비동기로 조회
-        List<Mono<Pair<ServiceInstance, Double>>> loadScoreMono = healthyInstances.stream()
-            .map(instance -> getInstanceLoadScoreAsync(instance)
-                .map(loadScore -> Pair.of((ServiceInstance) instance, loadScore)))
-            .collect(Collectors.toList());
+        return Flux.fromIterable(healthyInstances)
+                .flatMap(instance -> 
+                    getInstanceLoadScoreAsync(instance)
+                        .map(score -> Map.entry(instance, score))  // ✅ Map.Entry 사용
+                )
+                .collectList()
+                .map(entries -> {
+                    // 부하점수 기준 정렬 후 인스턴스만 추출
+                    List<ServiceInstance> sortedInstances = entries.stream()
+                            .sorted(Map.Entry.comparingByValue())  // ✅ Map.Entry 정렬
+                            .map(Map.Entry::getKey)               // ✅ 인스턴스만 추출
+                            .collect(Collectors.toList());
 
-        // 모든 부하점수를 병렬로 조회한 후 정렬
-        return Flux.fromIterable(loadScoreMono)
-            .flatMap(mono -> mono)
-            .collectList()
-            .map(pairs -> {
-                // 🔥 정렬된 pairs 생성
-                List<Pair<ServiceInstance, Double>> sortedPairs = pairs.stream()
-                    .sorted(Comparator.comparingDouble(Pair::getSecond))
-                    .collect(Collectors.toList());
-                
-                // 🔥 정렬된 인스턴스 목록 생성
-                List<ServiceInstance> sorted = sortedPairs.stream()
-                    .map(Pair::getFirst)
-                    .collect(Collectors.toList());
-                
-                log.info("부하점수 기반 정렬 완료: {} 인스턴스", sorted.size());
-
-                // 🔥 정렬된 순서대로 로그 출력
-                String sortedOrder = sortedPairs.stream()
-                    .map(pair -> String.format("%s(%.1f)", 
-                        pair.getFirst().getInstanceId(), 
-                        pair.getSecond()))
-                    .collect(Collectors.joining(" → "));
-                
-                log.info("정렬 순서: {}", sortedOrder);
-            
-                // 🔥 상세 정보도 정렬된 순서대로 출력
-                for (int i = 0; i < sortedPairs.size(); i++) {
-                    Pair<ServiceInstance, Double> pair = sortedPairs.get(i);
-                    log.info("  {}. {} -> 부하점수: {} (우선순위: {})",
-                        (i + 1),
-                        pair.getFirst().getInstanceId(), 
-                        String.format("%.2f", pair.getSecond()),
-                        i == 0 ? "최우선" : "대기");
-                }
-            
-                return sorted;
-        });
+                    // 정렬 결과 로그
+                    String sortOrder = entries.stream()
+                            .sorted(Map.Entry.comparingByValue())
+                            .map(entry -> String.format("%s(%.1f)", 
+                                entry.getKey().getInstanceId(), 
+                                entry.getValue()))
+                            .collect(Collectors.joining(" → "));
+                    
+                    log.info("부하점수 기준 정렬 완료: {}", sortOrder);
+                    log.info("활성 인스턴스 수: {}/{}", sortedInstances.size(), staticInstances.size());
+                    
+                    return sortedInstances;
+                })
+                .doOnError(error -> log.error("부하점수 기반 정렬 실패", error))
+                .onErrorReturn(getFallbackInstances());
 }
 
     /**
@@ -143,9 +127,9 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         if (reactiveRedisTemplate == null) {
             return Mono.just(100.0);
         }
-        
+
         String key = METRICS_KEY_PREFIX + instance.getInstanceId();
-        
+
         return reactiveRedisTemplate.opsForValue()
                 .get(key)
                 .cast(Map.class)
@@ -161,22 +145,6 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                 })
                 .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
                 .onErrorReturn(100.0);
-    }
-
-    private List<ServiceInstance> sortInstancesByLoadScore(List<LoadBalancedServiceBatchInstance> healthyInstances) {
-        if (healthyInstances.isEmpty()) {
-            log.warn("건강한 service-batch 인스턴스가 없습니다. 모든 인스턴스를 반환합니다.");
-            return new ArrayList<>(staticInstances);
-        }
-
-        List<ServiceInstance> sortedInstances = healthyInstances.stream()
-                .sorted(Comparator.comparingDouble(this::getInstanceLoadScoreFromRedis))
-                .collect(Collectors.toList());
-
-        log.info("부하 기준 정렬된 활성 인스턴스 수: {}/{}",
-                sortedInstances.size(), staticInstances.size());
-        
-        return sortedInstances;
     }
 
     private List<ServiceInstance> getFallbackInstances() {
@@ -198,7 +166,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
             try {
                 // 1. Actuator 헬스체크
                 checkActuatorHealth(instance);
-                
+
                 // 2. 메트릭 수집 (건강한 경우에만)
                 if (instance.isHealthy.get()) {
                     collectLoadMetrics(instance);
@@ -208,7 +176,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
             }
         });
     }
-    
+
     /**
      * Actuator health 엔드포인트로 헬스체크 + Redis 저장
      */
@@ -242,7 +210,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                                 log.warn("인스턴스 {}:{} 헬스체크 실패: {}",
                                         instance.getHost(), instance.getPort(),
                                         error.getMessage());
-                                
+
                                 // Redis에 DOWN 상태 저장
                                 saveHealthStatusToRedis(instance.getInstanceId(), false)
                                         .subscribe();
@@ -250,7 +218,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                         }
                 );
     }
-    
+
     /**
      * 메트릭 수집 + Redis 저장
      */
@@ -265,7 +233,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                 .subscribe(
                         metrics -> {
                             String instanceId = instance.getInstanceId();
-                            
+
                             // Redis에 메트릭 저장
                             saveMetricsToRedis(instanceId, metrics)
                                     .subscribe();
@@ -274,42 +242,42 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                             log.error("인스턴스 {}:{} 메트릭 수집 실패: {}",
                                     instance.getHost(), instance.getPort(),
                                     error.getMessage());
-                            
+
                             // Redis에서 메트릭 제거
                             removeMetricsFromRedis(instance.getInstanceId())
                                     .subscribe();
                         }
                 );
     }
-    
+
     /**
      * Redis에 헬스 상태 저장 (타입 안전한 방식)
      */
     private Mono<Void> saveHealthStatusToRedis(String instanceId, boolean isHealthy) {
         if (reactiveRedisTemplate == null) return Mono.empty();
-        
+
         String key = HEALTH_KEY_PREFIX + instanceId;
-        
+
         // 🔥 단순한 Map으로 저장 (타입 정보 제거)
         Map<String, Object> healthData = new HashMap<>();
         healthData.put("isHealthy", isHealthy);
         healthData.put("timestamp", System.currentTimeMillis());  // Long으로 직접 저장
-        
+
         return reactiveRedisTemplate.opsForValue()
                 .set(key, healthData, Duration.ofSeconds(CACHE_TTL_SECONDS))
                 .doOnSuccess(v -> log.debug("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
                 .doOnError(e -> log.error("헬스 상태 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
-    
+
     /**
      * Redis에 메트릭 저장 (타입 안전한 방식)
      */
     private Mono<Void> saveMetricsToRedis(String instanceId, Map<String, Object> metrics) {
         if (reactiveRedisTemplate == null) return Mono.empty();
-        
+
         String key = METRICS_KEY_PREFIX + instanceId;
-        
+
         // 🔥 새로운 Map으로 복사하여 타입 문제 방지
         Map<String, Object> safeMetrics = new HashMap<>();
         metrics.forEach((k, v) -> {
@@ -318,26 +286,26 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
             }
         });
         safeMetrics.put("timestamp", System.currentTimeMillis());  // Long으로 직접 저장
-        
+
         return reactiveRedisTemplate.opsForValue()
                 .set(key, safeMetrics, Duration.ofSeconds(CACHE_TTL_SECONDS))
                 .doOnSuccess(v -> log.debug("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
                 .doOnError(e -> log.error("메트릭 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
-    
+
     /**
      * Redis에서 메트릭 제거
      */
     private Mono<Void> removeMetricsFromRedis(String instanceId) {
         if (reactiveRedisTemplate == null) return Mono.empty();
-        
+
         String metricsKey = METRICS_KEY_PREFIX + instanceId;
         String healthKey = HEALTH_KEY_PREFIX + instanceId;
-        
+
         return reactiveRedisTemplate.delete(metricsKey, healthKey).then();
     }
-    
+
     /**
      * Redis에서 건강한 인스턴스 목록 조회
      */
@@ -347,23 +315,23 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     .filter(instance -> instance.isHealthy.get())
                     .collect(Collectors.toList()));
         }
-        
+
         List<Mono<LoadBalancedServiceBatchInstance>> healthChecks = staticInstances.stream()
                 .map(this::checkInstanceHealthInRedis)
                 .collect(Collectors.toList());
-        
+
         return Flux.fromIterable(healthChecks)
                 .flatMap(mono -> mono)
                 .filter(Objects::nonNull)
                 .collectList();
     }
-    
+
     /**
      * Redis에서 개별 인스턴스 헬스 상태 확인
      */
     private Mono<LoadBalancedServiceBatchInstance> checkInstanceHealthInRedis(LoadBalancedServiceBatchInstance instance) {
         String healthKey = HEALTH_KEY_PREFIX + instance.getInstanceId();
-        
+
         return reactiveRedisTemplate.opsForValue()
                 .get(healthKey)
                 .cast(Map.class)
@@ -384,75 +352,44 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
                 });
     }
-    
+
+
     /**
-     * Redis에서 인스턴스의 부하 점수 조회
-     */
-    private double getInstanceLoadScoreFromRedis(ServiceInstance instance) {
-        if (reactiveRedisTemplate == null) {
-            return 100.0;
-        }
-        
-        String key = METRICS_KEY_PREFIX + instance.getInstanceId();
-        
-        try {
-            Map<String, Object> metrics = (Map<String, Object>) reactiveRedisTemplate.opsForValue()
-                    .get(key)
-                    .cast(Map.class)
-                    .block(Duration.ofMillis(100)); // 짧은 타임아웃
-            
-            if (metrics != null) {
-                Object loadScore = metrics.get("loadScore");
-                if (loadScore instanceof Double) {
-                    return (Double) loadScore;
-                }
-                if (loadScore instanceof Number) {
-                    return ((Number) loadScore).doubleValue();
-                }
-            }
-        } catch (Exception e) {
-            log.error("Redis에서 부하점수 조회 실패 ({}): {}", instance.getInstanceId(), e.getMessage());
-        }
-        
-        return 100.0; // Redis에 데이터가 없으면 최대 부하로 처리
-    }
-    
-    /**
-     * Redis에서 모든 인스턴스의 메트릭 정보 조회
+     * 🔥 Redis에서 모든 인스턴스의 메트릭 정보 조회 (비동기 버전 사용)
      */
     public Mono<Map<String, Map<String, Object>>> getAllMetricsFromRedis() {
         if (reactiveRedisTemplate == null) {
             return Mono.just(new HashMap<>());
         }
-        
+
         List<String> keys = staticInstances.stream()
                 .map(instance -> METRICS_KEY_PREFIX + instance.getInstanceId())
                 .collect(Collectors.toList());
-        
+
         return reactiveRedisTemplate.opsForValue()
                 .multiGet(keys)
                 .map(values -> {
                     Map<String, Map<String, Object>> allMetrics = new HashMap<>();
-                    
+
                     for (int i = 0; i < keys.size() && i < values.size(); i++) {
                         if (values.get(i) != null) {
                             String instanceId = keys.get(i).replace(METRICS_KEY_PREFIX, "");
                             allMetrics.put(instanceId, (Map<String, Object>) values.get(i));
                         }
                     }
-                    
+
                     return allMetrics;
                 });
     }
-    
+
     /**
-     * 로드밸런서 상태 요약 (Redis 데이터 기반)
+     * 🔥 로드밸런서 상태 요약 (비동기 메서드 활용)
      */
     public Mono<Map<String, Object>> getDetailedStatusFromRedis() {
         return getAllMetricsFromRedis()
                 .map(allMetrics -> {
                     Map<String, Object> status = new HashMap<>();
-                    
+
                     List<Map<String, Object>> instances = staticInstances.stream()
                             .map(instance -> {
                                 Map<String, Object> instanceInfo = new HashMap<>();
@@ -461,7 +398,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                                 instanceInfo.put("port", instance.getPort());
                                 instanceInfo.put("isHealthy", instance.isHealthy.get());
                                 instanceInfo.put("uri", instance.getUri().toString());
-                                
+
                                 // Redis에서 메트릭 정보 추가
                                 Map<String, Object> metrics = allMetrics.get(instance.getInstanceId());
                                 if (metrics != null) {
@@ -478,18 +415,18 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                                     instanceInfo.put("metricsStatus", "NO_REDIS_DATA");
                                     instanceInfo.put("dataSource", "LOCAL");
                                 }
-                                
+
                                 return instanceInfo;
                             })
                             .collect(Collectors.toList());
-                    
+
                     // 전체 상태 요약
                     long healthyCount = staticInstances.stream()
                             .mapToLong(instance -> instance.isHealthy.get() ? 1 : 0)
                             .sum();
-                            
+
                     long metricsAvailableCount = allMetrics.size();
-                    
+
                     status.put("serviceId", serviceId);
                     status.put("totalInstances", staticInstances.size());
                     status.put("healthyInstances", healthyCount);
@@ -498,23 +435,29 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     status.put("timestamp", System.currentTimeMillis());
                     status.put("cacheSource", "REDIS");
                     status.put("redisEnabled", reactiveRedisTemplate != null);
-                    
-                    // 최적 인스턴스 정보
+
+                    // 🔥 최적 인스턴스 정보 (비동기 메서드 사용하지만 동기로 변환)
                     Optional<LoadBalancedServiceBatchInstance> bestInstance = staticInstances.stream()
                             .filter(instance -> instance.isHealthy.get())
-                            .min(Comparator.comparingDouble(this::getInstanceLoadScoreFromRedis));
-                            
+                            .min(Comparator.comparingDouble(instance ->
+                                    getInstanceLoadScoreAsync(instance)
+                                            .block(Duration.ofSeconds(1))  // 1초 타임아웃으로 동기 변환
+                                            .doubleValue()));
+
                     if (bestInstance.isPresent()) {
                         Map<String, Object> bestInfo = new HashMap<>();
                         bestInfo.put("instanceId", bestInstance.get().getInstanceId());
-                        bestInfo.put("loadScore", getInstanceLoadScoreFromRedis(bestInstance.get()));
+                        // 🔥 비동기 메서드를 동기로 변환하여 사용
+                        Double loadScore = getInstanceLoadScoreAsync(bestInstance.get())
+                                .block(Duration.ofSeconds(1));
+                        bestInfo.put("loadScore", loadScore);
                         status.put("currentBestInstance", bestInfo);
                     }
-                    
+
                     return status;
                 });
     }
-    
+
     /**
      * Blocking 버전 (기존 호환성)
      */
@@ -522,11 +465,11 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         if (reactiveRedisTemplate == null) {
             return new HashMap<>();
         }
-        
+
         return getAllMetricsFromRedis()
                 .block(Duration.ofSeconds(2));
     }
-    
+
     public Map<String, Object> getDetailedStatus() {
         if (reactiveRedisTemplate == null) {
             Map<String, Object> fallback = new HashMap<>();
@@ -534,11 +477,11 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
             fallback.put("redisEnabled", false);
             return fallback;
         }
-        
+
         return getDetailedStatusFromRedis()
                 .block(Duration.ofSeconds(2));
     }
-    
+
     /**
      * LoadBalancer 지원 ServiceInstance 구현체
      */
@@ -594,25 +537,5 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     "cacheType", "REDIS"
             );
         }
-    }
-    
-    /**
-     * 🔧 Pair 클래스 (부하점수와 인스턴스를 함께 관리)
-     */
-    private static class Pair<T, U> {
-        private final T first;
-        private final U second;
-        
-        public Pair(T first, U second) {
-            this.first = first;
-            this.second = second;
-        }
-        
-        public static <T, U> Pair<T, U> of(T first, U second) {
-            return new Pair<>(first, second);
-        }
-        
-        public T getFirst() { return first; }
-        public U getSecond() { return second; }
     }
 }

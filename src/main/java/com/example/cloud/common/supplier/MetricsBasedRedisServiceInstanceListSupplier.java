@@ -154,7 +154,6 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     Object loadScore = metrics.get("loadScore");
                     if (loadScore instanceof Number) {
                         double score = ((Number) loadScore).doubleValue();
-                        log.info("부하점수 조회: {} -> {}", instance.getInstanceId(), score);
                         return score;
                     }
                     log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
@@ -270,21 +269,9 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                             // Redis에 메트릭 저장
                             saveMetricsToRedis(instanceId, metrics)
                                     .subscribe();
-                            
-                            Object loadScore = metrics.get("loadScore");
-                            Object isHealthy = metrics.get("isHealthy");
-                            Object cpuUsage = metrics.get("cpuUsage");
-                            Object memoryUsage = metrics.get("memoryUsage");
-                            
-                            log.info("인스턴스 {} 메트릭 수집 성공 - 부하점수: {}, CPU: {}%, 메모리: {}%, 건강상태: {}",
-                                    instanceId, 
-                                    loadScore instanceof Double ? String.format("%.2f", (Double) loadScore) : "0.00",
-                                    cpuUsage instanceof Double ? String.format("%.1f", (Double) cpuUsage) : "0.0",
-                                    memoryUsage instanceof Double ? String.format("%.1f", (Double) memoryUsage) : "0.0",
-                                    isHealthy);
                         },
                         error -> {
-                            log.info("인스턴스 {}:{} 메트릭 수집 실패: {}",
+                            log.error("인스턴스 {}:{} 메트릭 수집 실패: {}",
                                     instance.getHost(), instance.getPort(),
                                     error.getMessage());
                             
@@ -310,7 +297,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         
         return reactiveRedisTemplate.opsForValue()
                 .set(key, healthData, Duration.ofSeconds(CACHE_TTL_SECONDS))
-                .doOnSuccess(v -> log.info("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
+                .doOnSuccess(v -> log.debug("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
                 .doOnError(e -> log.error("헬스 상태 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
@@ -334,7 +321,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         
         return reactiveRedisTemplate.opsForValue()
                 .set(key, safeMetrics, Duration.ofSeconds(CACHE_TTL_SECONDS))
-                .doOnSuccess(v -> log.info("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
+                .doOnSuccess(v -> log.debug("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
                 .doOnError(e -> log.error("메트릭 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }

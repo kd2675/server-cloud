@@ -295,7 +295,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     return instance.isHealthy.get() ? instance : null;
                 }))
                 .onErrorResume(error -> {
-                    log.debug("Redis에서 헬스 상태 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage());
+                    log.error("Redis에서 헬스 상태 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage());
                     return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
                 });
     }
@@ -326,7 +326,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                 }
             }
         } catch (Exception e) {
-            log.debug("Redis에서 부하점수 조회 실패 ({}): {}", instance.getInstanceId(), e.getMessage());
+            log.error("Redis에서 부하점수 조회 실패 ({}): {}", instance.getInstanceId(), e.getMessage());
         }
         
         return 100.0; // Redis에 데이터가 없으면 최대 부하로 처리

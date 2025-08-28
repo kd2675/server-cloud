@@ -41,7 +41,7 @@ spring:
       on-profile: prod
   data:
     redis:
-      port: 16379
+      port: 6379
       host: redis-10480
   session:
     store-type: redis

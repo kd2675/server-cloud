@@ -67,15 +67,82 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         return serviceId;
     }
 
+    /**
+     * 🚀 완전 비동기 버전으로 변경
+     */
     @Override
     public Flux<List<ServiceInstance>> get() {
         return getHealthyInstancesFromRedis()
-                .map(this::sortInstancesByLoadScore)
+                .flatMap(this::sortInstancesByLoadScoreAsync)  // 🔥 비동기로 변경
                 .onErrorResume(error -> {
                     log.warn("Redis에서 인스턴스 조회 실패, fallback 사용: {}", error.getMessage());
                     return Mono.just(getFallbackInstances());
                 })
                 .flux();
+    }
+
+    /**
+     * 🔥 비동기로 부하점수 기반 정렬
+     */
+    private Mono<List<ServiceInstance>> sortInstancesByLoadScoreAsync(List<LoadBalancedServiceBatchInstance> healthyInstances) {
+        if (healthyInstances.isEmpty()) {
+            log.warn("건강한 service-batch 인스턴스가 없습니다.");
+            return Mono.just(getFallbackInstances());
+        }
+
+        // 각 인스턴스의 부하점수를 비동기로 조회
+        List<Mono<Pair<ServiceInstance, Double>>> loadScoreMono = healthyInstances.stream()
+            .map(instance -> getInstanceLoadScoreAsync(instance)
+                .map(loadScore -> Pair.of((ServiceInstance) instance, loadScore)))
+            .collect(Collectors.toList());
+
+        // 모든 부하점수를 병렬로 조회한 후 정렬
+        return Flux.fromIterable(loadScoreMono)
+            .flatMap(mono -> mono)
+            .collectList()
+            .map(pairs -> {
+                // 부하점수 기준으로 정렬
+                List<ServiceInstance> sorted = pairs.stream()
+                    .sorted(Comparator.comparingDouble(pair -> pair.getSecond()))
+                    .map(pair -> pair.getFirst())
+                    .collect(Collectors.toList());
+                
+                log.info("부하점수 기반 정렬 완료: {} 인스턴스", sorted.size());
+                pairs.forEach(pair -> 
+                    log.debug("  {} -> 부하점수: {}", 
+                        pair.getFirst().getInstanceId(), 
+                        String.format("%.2f", pair.getSecond())));
+                
+                return sorted;
+            });
+    }
+
+    /**
+     * 🔥 비동기로 부하점수 조회
+     */
+    private Mono<Double> getInstanceLoadScoreAsync(ServiceInstance instance) {
+        if (reactiveRedisTemplate == null) {
+            return Mono.just(100.0);
+        }
+        
+        String key = METRICS_KEY_PREFIX + instance.getInstanceId();
+        
+        return reactiveRedisTemplate.opsForValue()
+                .get(key)
+                .cast(Map.class)
+                .timeout(Duration.ofSeconds(1))  // 1초 타임아웃
+                .map(metrics -> {
+                    Object loadScore = metrics.get("loadScore");
+                    if (loadScore instanceof Number) {
+                        double score = ((Number) loadScore).doubleValue();
+                        log.info("부하점수 조회: {} -> {}", instance.getInstanceId(), score);
+                        return score;
+                    }
+                    log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
+                    return 100.0;
+                })
+                .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
+                .onErrorReturn(100.0);
     }
 
     private List<ServiceInstance> sortInstancesByLoadScore(List<LoadBalancedServiceBatchInstance> healthyInstances) {
@@ -509,5 +576,25 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     "cacheType", "REDIS"
             );
         }
+    }
+    
+    /**
+     * 🔧 Pair 클래스 (부하점수와 인스턴스를 함께 관리)
+     */
+    private static class Pair<T, U> {
+        private final T first;
+        private final U second;
+        
+        public Pair(T first, U second) {
+            this.first = first;
+            this.second = second;
+        }
+        
+        public static <T, U> Pair<T, U> of(T first, U second) {
+            return new Pair<>(first, second);
+        }
+        
+        public T getFirst() { return first; }
+        public U getSecond() { return second; }
     }
 }

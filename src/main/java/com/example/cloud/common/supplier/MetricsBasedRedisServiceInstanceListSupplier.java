@@ -101,34 +101,40 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
             .flatMap(mono -> mono)
             .collectList()
             .map(pairs -> {
-                // 부하점수 기준으로 정렬
-                List<ServiceInstance> sorted = pairs.stream()
-                    .sorted(Comparator.comparingDouble(pair -> pair.getSecond()))
-                    .map(pair -> pair.getFirst())
+                // 🔥 정렬된 pairs 생성
+                List<Pair<ServiceInstance, Double>> sortedPairs = pairs.stream()
+                    .sorted(Comparator.comparingDouble(Pair::getSecond))
+                    .collect(Collectors.toList());
+                
+                // 🔥 정렬된 인스턴스 목록 생성
+                List<ServiceInstance> sorted = sortedPairs.stream()
+                    .map(Pair::getFirst)
                     .collect(Collectors.toList());
                 
                 log.info("부하점수 기반 정렬 완료: {} 인스턴스", sorted.size());
 
-                StringBuilder sortOrder = new StringBuilder("정렬 순서: ");
-                for (int i = 0; i < pairs.size(); i++) {
-                    Pair<ServiceInstance, Double> pair = pairs.get(i);
-                    sortOrder.append(String.format("%s(%.1f)",
-                            pair.getFirst().getInstanceId(),
-                            pair.getSecond()));
-                    if (i < pairs.size() - 1) {
-                        sortOrder.append(" > ");
-                    }
-                }
-                log.info(sortOrder.toString());
-
-                pairs.forEach(pair -> 
-                    log.info("  {} -> 부하점수: {}",
+                // 🔥 정렬된 순서대로 로그 출력
+                String sortedOrder = sortedPairs.stream()
+                    .map(pair -> String.format("%s(%.1f)", 
                         pair.getFirst().getInstanceId(), 
-                        String.format("%.2f", pair.getSecond())));
+                        pair.getSecond()))
+                    .collect(Collectors.joining(" → "));
                 
+                log.info("정렬 순서: {}", sortedOrder);
+            
+                // 🔥 상세 정보도 정렬된 순서대로 출력
+                for (int i = 0; i < sortedPairs.size(); i++) {
+                    Pair<ServiceInstance, Double> pair = sortedPairs.get(i);
+                    log.info("  {}. {} -> 부하점수: {} (우선순위: {})",
+                        (i + 1),
+                        pair.getFirst().getInstanceId(), 
+                        String.format("%.2f", pair.getSecond()),
+                        i == 0 ? "최우선" : "대기");
+                }
+            
                 return sorted;
-            });
-    }
+        });
+}
 
     /**
      * 🔥 비동기로 부하점수 조회

@@ -16,18 +16,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Slf4j
-@Component
-public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceListSupplier {
+//@Component
+public class MetricsBasedLocalServiceInstanceListSupplier implements ServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;
     private final List<LoadBalancedServiceBatchInstance> staticInstances;
-    
+
     // 메트릭 캐시 (30초 TTL)
     private final Map<String, Map<String, Object>> metricsCache = new ConcurrentHashMap<>();
     private final Map<String, Long> cacheTimestamps = new ConcurrentHashMap<>();
     private final long CACHE_TTL = 30000; // 30초
 
-    public MetricsBasedServiceInstanceListSupplier(ConfigurableApplicationContext context) {
+    public MetricsBasedLocalServiceInstanceListSupplier(ConfigurableApplicationContext context) {
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
@@ -45,7 +45,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                 new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
-        log.info("MetricsBasedLoadBalancer 초기화 완료 - {}:{}|{}:{}|{}:{}", 
+        log.info("MetricsBasedLoadBalancer 초기화 완료 - {}:{}|{}:{}|{}:{}",
                 serverHost, serverPort1, serverHost, serverPort2, serverHost, serverPort3);
 
         // 백그라운드 모니터링 시작
@@ -80,7 +80,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
 
         log.info("부하 기준 정렬된 활성 인스턴스 수: {}/{}",
                 sortedInstances.size(), staticInstances.size());
-        
+
         return Flux.just(sortedInstances);
     }
 
@@ -99,7 +99,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
             try {
                 // 1. Actuator 헬스체크
                 checkActuatorHealth(instance);
-                
+
                 // 2. 메트릭 수집 (건강한 경우에만)
                 if (instance.isHealthy.get()) {
                     collectLoadMetrics(instance);
@@ -109,7 +109,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
             }
         });
     }
-    
+
     /**
      * Actuator health 엔드포인트로 헬스체크
      */
@@ -143,7 +143,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                         }
                 );
     }
-    
+
     /**
      * ActuatorMetricsController의 /service/batch/metrics/load 엔드포인트에서 메트릭 수집
      */
@@ -160,14 +160,14 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                             String instanceId = instance.getInstanceId();
                             metricsCache.put(instanceId, metrics);
                             cacheTimestamps.put(instanceId, System.currentTimeMillis());
-                            
+
                             Object loadScore = metrics.get("loadScore");
                             Object isHealthy = metrics.get("isHealthy");
                             Object cpuUsage = metrics.get("cpuUsage");
                             Object memoryUsage = metrics.get("memoryUsage");
-                            
+
                             log.info("인스턴스 {} 메트릭 수집 성공 - 부하점수: {}, CPU: {}%, 메모리: {}%, 건강상태: {}",
-                                    instanceId, 
+                                    instanceId,
                                     loadScore instanceof Double ? String.format("%.2f", (Double) loadScore) : "0.00",
                                     cpuUsage instanceof Double ? String.format("%.1f", (Double) cpuUsage) : "0.0",
                                     memoryUsage instanceof Double ? String.format("%.1f", (Double) memoryUsage) : "0.0",
@@ -177,20 +177,20 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                             log.info("인스턴스 {}:{} 메트릭 수집 실패: {}",
                                     instance.getHost(), instance.getPort(),
                                     error.getMessage());
-                            
+
                             // 메트릭 수집 실패 시 캐시에서 제거
                             metricsCache.remove(instance.getInstanceId());
                             cacheTimestamps.remove(instance.getInstanceId());
                         }
                 );
     }
-    
+
     /**
      * 인스턴스의 부하 점수 조회 (낮을수록 좋음)
      */
     private double getInstanceLoadScore(LoadBalancedServiceBatchInstance instance) {
         String instanceId = instance.getInstanceId();
-        
+
         // 캐시 확인
         Long cacheTime = cacheTimestamps.get(instanceId);
         if (cacheTime != null && (System.currentTimeMillis() - cacheTime) < CACHE_TTL) {
@@ -202,23 +202,23 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                 }
             }
         }
-        
+
         return 100.0; // 캐시에 없으면 최대 부하로 처리 (우선순위 낮음)
     }
-    
+
     /**
      * 모든 인스턴스의 메트릭 정보 조회
      */
     public Map<String, Map<String, Object>> getAllMetrics() {
         return new HashMap<>(metricsCache);
     }
-    
+
     /**
      * 로드밸런서 상태 요약 (메트릭 정보 포함)
      */
     public Map<String, Object> getDetailedStatus() {
         Map<String, Object> status = new HashMap<>();
-        
+
         List<Map<String, Object>> instances = staticInstances.stream()
                 .map(instance -> {
                     Map<String, Object> instanceInfo = new HashMap<>();
@@ -227,7 +227,7 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                     instanceInfo.put("port", instance.getPort());
                     instanceInfo.put("isHealthy", instance.isHealthy.get());
                     instanceInfo.put("uri", instance.getUri().toString());
-                    
+
                     // 메트릭 정보 추가
                     Map<String, Object> metrics = metricsCache.get(instance.getInstanceId());
                     if (metrics != null) {
@@ -242,40 +242,40 @@ public class MetricsBasedServiceInstanceListSupplier implements ServiceInstanceL
                         instanceInfo.put("loadScore", 100.0);
                         instanceInfo.put("metricsStatus", "NO_DATA");
                     }
-                    
+
                     return instanceInfo;
                 })
                 .collect(Collectors.toList());
-        
+
         // 전체 상태 요약
         long healthyCount = staticInstances.stream()
                 .mapToLong(instance -> instance.isHealthy.get() ? 1 : 0)
                 .sum();
-                
+
         long metricsAvailableCount = metricsCache.size();
-        
+
         status.put("serviceId", serviceId);
         status.put("totalInstances", staticInstances.size());
         status.put("healthyInstances", healthyCount);
         status.put("metricsAvailableInstances", metricsAvailableCount);
         status.put("instances", instances);
         status.put("timestamp", System.currentTimeMillis());
-        
+
         // 최적 인스턴스 정보
         Optional<LoadBalancedServiceBatchInstance> bestInstance = staticInstances.stream()
                 .filter(instance -> instance.isHealthy.get())
                 .min(Comparator.comparingDouble(this::getInstanceLoadScore));
-                
+
         if (bestInstance.isPresent()) {
             Map<String, Object> bestInfo = new HashMap<>();
             bestInfo.put("instanceId", bestInstance.get().getInstanceId());
             bestInfo.put("loadScore", getInstanceLoadScore(bestInstance.get()));
             status.put("currentBestInstance", bestInfo);
         }
-        
+
         return status;
     }
-    
+
     /**
      * LoadBalancer 지원 ServiceInstance 구현체
      */

@@ -1,6 +1,6 @@
 package com.example.cloud.common.health.act;
 
-import com.example.cloud.common.supplier.MetricsBasedServiceInstanceListSupplier;
+import com.example.cloud.common.supplier.MetricsBasedRedisServiceInstanceListSupplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.core.response.base.dto.ResponseDTO;
@@ -42,7 +42,7 @@ public class HealthController implements HealthIndicator {
 
     // LoadBalancer 상태 조회를 위한 Supplier 주입
     @Autowired(required = false)
-    private MetricsBasedServiceInstanceListSupplier loadBalancerSupplier;
+    private MetricsBasedRedisServiceInstanceListSupplier loadBalancerSupplier;
 
     private int count = 0;
 

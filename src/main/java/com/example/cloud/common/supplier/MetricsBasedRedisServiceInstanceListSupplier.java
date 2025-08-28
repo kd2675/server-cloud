@@ -108,8 +108,21 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                     .collect(Collectors.toList());
                 
                 log.info("부하점수 기반 정렬 완료: {} 인스턴스", sorted.size());
+
+                StringBuilder sortOrder = new StringBuilder("정렬 순서: ");
+                for (int i = 0; i < pairs.size(); i++) {
+                    Pair<ServiceInstance, Double> pair = pairs.get(i);
+                    sortOrder.append(String.format("%s(%.1f)",
+                            pair.getFirst().getInstanceId(),
+                            pair.getSecond()));
+                    if (i < pairs.size() - 1) {
+                        sortOrder.append(" > ");
+                    }
+                }
+                log.info(sortOrder.toString());
+
                 pairs.forEach(pair -> 
-                    log.debug("  {} -> 부하점수: {}", 
+                    log.info("  {} -> 부하점수: {}",
                         pair.getFirst().getInstanceId(), 
                         String.format("%.2f", pair.getSecond())));
                 
@@ -277,34 +290,46 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
     }
     
     /**
-     * Redis에 헬스 상태 저장
+     * Redis에 헬스 상태 저장 (타입 안전한 방식)
      */
     private Mono<Void> saveHealthStatusToRedis(String instanceId, boolean isHealthy) {
         if (reactiveRedisTemplate == null) return Mono.empty();
         
         String key = HEALTH_KEY_PREFIX + instanceId;
-        Map<String, Object> healthData = Map.of(
-                "isHealthy", isHealthy,
-                "timestamp", System.currentTimeMillis()
-        );
+        
+        // 🔥 단순한 Map으로 저장 (타입 정보 제거)
+        Map<String, Object> healthData = new HashMap<>();
+        healthData.put("isHealthy", isHealthy);
+        healthData.put("timestamp", System.currentTimeMillis());  // Long으로 직접 저장
         
         return reactiveRedisTemplate.opsForValue()
                 .set(key, healthData, Duration.ofSeconds(CACHE_TTL_SECONDS))
+                .doOnSuccess(v -> log.info("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
+                .doOnError(e -> log.error("헬스 상태 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
     
     /**
-     * Redis에 메트릭 저장
+     * Redis에 메트릭 저장 (타입 안전한 방식)
      */
     private Mono<Void> saveMetricsToRedis(String instanceId, Map<String, Object> metrics) {
         if (reactiveRedisTemplate == null) return Mono.empty();
         
         String key = METRICS_KEY_PREFIX + instanceId;
-        Map<String, Object> enrichedMetrics = new HashMap<>(metrics);
-        enrichedMetrics.put("timestamp", System.currentTimeMillis());
+        
+        // 🔥 새로운 Map으로 복사하여 타입 문제 방지
+        Map<String, Object> safeMetrics = new HashMap<>();
+        metrics.forEach((k, v) -> {
+            if (v instanceof Number || v instanceof String || v instanceof Boolean) {
+                safeMetrics.put(k, v);  // 기본 타입만 저장
+            }
+        });
+        safeMetrics.put("timestamp", System.currentTimeMillis());  // Long으로 직접 저장
         
         return reactiveRedisTemplate.opsForValue()
-                .set(key, enrichedMetrics, Duration.ofSeconds(CACHE_TTL_SECONDS))
+                .set(key, safeMetrics, Duration.ofSeconds(CACHE_TTL_SECONDS))
+                .doOnSuccess(v -> log.info("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
+                .doOnError(e -> log.error("메트릭 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
     

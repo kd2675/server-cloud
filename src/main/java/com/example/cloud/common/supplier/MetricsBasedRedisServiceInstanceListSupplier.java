@@ -133,7 +133,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         return reactiveRedisTemplate.opsForValue()
                 .get(key)
                 .cast(Map.class)
-                .timeout(Duration.ofSeconds(1))  // 1초 타임아웃
+                .timeout(Duration.ofSeconds(3))
                 .map(metrics -> {
                     Object loadScore = metrics.get("loadScore");
                     if (loadScore instanceof Number) {
@@ -441,7 +441,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                             .filter(instance -> instance.isHealthy.get())
                             .min(Comparator.comparingDouble(instance ->
                                     getInstanceLoadScoreAsync(instance)
-                                            .block(Duration.ofSeconds(1))  // 1초 타임아웃으로 동기 변환
+                                            .block(Duration.ofSeconds(3))  // 1초 타임아웃으로 동기 변환
                                             .doubleValue()));
 
                     if (bestInstance.isPresent()) {
@@ -449,7 +449,7 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
                         bestInfo.put("instanceId", bestInstance.get().getInstanceId());
                         // 🔥 비동기 메서드를 동기로 변환하여 사용
                         Double loadScore = getInstanceLoadScoreAsync(bestInstance.get())
-                                .block(Duration.ofSeconds(1));
+                                .block(Duration.ofSeconds(3));
                         bestInfo.put("loadScore", loadScore);
                         status.put("currentBestInstance", bestInfo);
                     }

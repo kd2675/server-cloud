@@ -47,104 +47,6 @@ public class HealthController implements HealthIndicator {
     private int count = 0;
 
     /**
-     * 기본 헬스체크 - Gateway 자체 상태
-     */
-    @RequestMapping
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> status = new HashMap<>();
-        status.put("status", "UP");
-        status.put("timestamp", LocalDateTime.now());
-        status.put("service", "Cloud Gateway");
-        
-        return ResponseEntity.ok(status);
-    }
-
-    /**
-     * 전체 시스템 헬스체크 (내부 + 외부 서비스 + LoadBalancer)
-     */
-    @GetMapping("/full")
-    public Mono<ResponseEntity<Map<String, Object>>> fullHealthCheck() {
-        return Mono.fromCallable(this::checkInternalHealth)
-                .flatMap(internalHealth -> {
-                    if ("UP".equals(internalHealth.get("status"))) {
-                        return checkExternalServices()
-                                .map(externalHealth -> {
-                                    Map<String, Object> fullHealth = new HashMap<>();
-                                    fullHealth.put("gateway", internalHealth);
-                                    fullHealth.put("external", externalHealth);
-                                    fullHealth.put("loadBalancer", checkLoadBalancerHealth());
-                                    fullHealth.put("overall", determineOverallStatus(internalHealth, externalHealth));
-                                    fullHealth.put("timestamp", LocalDateTime.now());
-                                    return ResponseEntity.ok(fullHealth);
-                                });
-                    } else {
-                        Map<String, Object> result = new HashMap<>();
-                        result.put("gateway", internalHealth);
-                        result.put("loadBalancer", checkLoadBalancerHealth());
-                        result.put("overall", "DOWN");
-                        result.put("timestamp", LocalDateTime.now());
-                        return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result));
-                    }
-                });
-    }
-
-    /**
-     * 내부 컴포넌트 헬스체크 (DB, Redis, Memory 등)
-     */
-    @GetMapping("/internal")
-    public ResponseEntity<Map<String, Object>> internalHealthCheck() {
-        Map<String, Object> result = checkInternalHealth();
-        
-        if ("UP".equals(result.get("status"))) {
-            return ResponseEntity.ok(result);
-        } else {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
-        }
-    }
-
-    /**
-     * 외부 서비스 헬스체크
-     */
-    @GetMapping("/external")
-    public Mono<ResponseEntity<Map<String, Object>>> externalHealthCheck() {
-        return checkExternalServices()
-                .map(result -> {
-                    boolean allUp = result.values().stream()
-                            .allMatch(status -> "UP".equals(((Map<?, ?>) status).get("status")));
-                    
-                    if (allUp) {
-                        return ResponseEntity.ok(result);
-                    } else {
-                        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
-                    }
-                });
-    }
-
-    /**
-     * LoadBalancer 상태 및 메트릭 조회
-     */
-    @GetMapping("/loadbalancer")
-    public ResponseEntity<Map<String, Object>> loadBalancerHealthCheck() {
-        try {
-            Map<String, Object> result = checkLoadBalancerHealth();
-            
-            String status = (String) result.get("status");
-            if ("UP".equals(status)) {
-                return ResponseEntity.ok(result);
-            } else {
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
-            }
-        } catch (Exception e) {
-            log.error("LoadBalancer 헬스체크 실패", e);
-            Map<String, Object> error = new HashMap<>();
-            error.put("status", "DOWN");
-            error.put("error", "LoadBalancer 상태 조회 실패: " + e.getMessage());
-            error.put("timestamp", LocalDateTime.now());
-            return ResponseEntity.internalServerError().body(error);
-        }
-    }
-
-    /**
      * LoadBalancer 상세 성능 정보
      */
     @GetMapping("/loadbalancer/performance")
@@ -220,19 +122,6 @@ public class HealthController implements HealthIndicator {
             error.put("timestamp", LocalDateTime.now());
             return ResponseEntity.internalServerError().body(error);
         }
-    }
-
-    /**
-     * Circuit Breaker 테스트용 엔드포인트
-     */
-    @GetMapping("/circuit")
-    public Mono<ResponseDTO> fallback() {
-        count++;
-        if (count % 2 == 0) { // 50% 실패
-            return Mono.error(new GeneralException(Code.SERVER_DOWN));
-        }
-
-        return Mono.just(ResponseDataDTO.of("success"));
     }
 
     /**
@@ -348,74 +237,5 @@ public class HealthController implements HealthIndicator {
         }
         
         return result;
-    }
-
-    /**
-     * 외부 서비스 헬스체크
-     */
-    private Mono<Map<String, Object>> checkExternalServices() {
-        Map<String, Object> result = new HashMap<>();
-        
-        Mono<Map<String, Object>> memberCheck = checkService("member", serverUrlMember + "/actuator/health");
-        Mono<Map<String, Object>> batchCheck = checkService("batch", serverUrlServiceBatch + "/service/batch/health");
-        Mono<Map<String, Object>> cocoinCheck = checkService("cocoin", serverUrlCocoin + "/actuator/health");
-
-        return Mono.zip(memberCheck, batchCheck, cocoinCheck)
-                .map(tuple -> {
-                    result.put("member", tuple.getT1());
-                    result.put("batch", tuple.getT2());
-                    result.put("cocoin", tuple.getT3());
-                    return result;
-                });
-    }
-
-    /**
-     * 개별 서비스 헬스체크
-     */
-    private Mono<Map<String, Object>> checkService(String serviceName, String url) {
-        return webClientBuilder.build()
-                .get()
-                .uri(url)
-                .retrieve()
-                .bodyToMono(String.class)
-                .timeout(java.time.Duration.ofSeconds(5))
-                .map(response -> {
-                    Map<String, Object> serviceHealth = new HashMap<>();
-                    serviceHealth.put("status", "UP");
-                    serviceHealth.put("response", response);
-                    serviceHealth.put("url", url);
-                    return serviceHealth;
-                })
-                .onErrorResume(throwable -> {
-                    Map<String, Object> serviceHealth = new HashMap<>();
-                    serviceHealth.put("status", "DOWN");
-                    serviceHealth.put("error", throwable.getMessage());
-                    serviceHealth.put("url", url);
-                    return Mono.just(serviceHealth);
-                });
-    }
-
-    /**
-     * 전체 상태 결정 (LoadBalancer 상태도 고려)
-     */
-    private String determineOverallStatus(Map<String, Object> internalHealth, Map<String, Object> externalHealth) {
-        if (!"UP".equals(internalHealth.get("status"))) {
-            return "DOWN";
-        }
-        
-        boolean allExternalUp = externalHealth.values().stream()
-                .allMatch(status -> "UP".equals(((Map<?, ?>) status).get("status")));
-        
-        // LoadBalancer 상태도 고려
-        Map<String, Object> loadBalancerHealth = checkLoadBalancerHealth();
-        boolean loadBalancerUp = "UP".equals(loadBalancerHealth.get("status"));
-        
-        if (allExternalUp && loadBalancerUp) {
-            return "UP";
-        } else if (loadBalancerUp) {
-            return "DEGRADED"; // 외부 서비스 일부 장애
-        } else {
-            return "DOWN"; // LoadBalancer 장애 시 전체 서비스 영향
-        }
     }
 }

@@ -172,7 +172,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
     }
 
     /**
-     * 🔧 가중 선택 결과 로깅
+     * 🔧 가중 선택 결과 로깅 - 포맷팅 수정
      */
     private void logWeightedSelection(List<WeightedInstance> weightedInstances, int totalCopies) {
         String weightInfo = weightedInstances.stream()
@@ -185,23 +185,24 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                         wi.weight,
                         copies,
                         percentage);
-                })
-                .collect(Collectors.joining(" | "));
-        
-        log.info("🎯 가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
-        
-        // 효율성 평가
-        double avgLoadScore = weightedInstances.stream()
-                .mapToDouble(wi -> wi.loadScore)
-                .average()
-                .orElse(100.0);
-        
-        String efficiency = avgLoadScore < 30 ? "EXCELLENT" :
-                           avgLoadScore < 50 ? "GOOD" :
-                           avgLoadScore < 70 ? "FAIR" : "POOR";
-        
-        log.info("🔍 로드밸런싱 효율성: {} (평균점수: {:.1f})", efficiency, avgLoadScore);
-    }
+            })
+            .collect(Collectors.joining(" | "));
+    
+    log.info("🎯 가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
+    
+    // 효율성 평가
+    double avgLoadScore = weightedInstances.stream()
+            .mapToDouble(wi -> wi.loadScore)
+            .average()
+            .orElse(100.0);
+    
+    String efficiency = avgLoadScore < 30 ? "EXCELLENT" :
+                       avgLoadScore < 50 ? "GOOD" :
+                       avgLoadScore < 70 ? "FAIR" : "POOR";
+    
+    // 🔥 Java 스타일 포맷팅으로 수정
+    log.info("🔍 로드밸런싱 효율성: {} (평균점수: {})", efficiency, String.format("%.1f", avgLoadScore));
+}
 
     /**
      * 🔥 비동기로 부하점수 조회 - 매개변수 타입 수정
@@ -240,7 +241,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                 .map(instance -> (ServiceInstance) instance)
                 .collect(Collectors.toList());
         
-        log.info("🔄 Fallback 인스턴스 사용: {} 개", fallbackList.size());
+            log.info("🔄 Fallback 인스턴스 사용: {} 개", fallbackList.size());
             return fallbackList;
         }
         return new ArrayList<>();
@@ -250,7 +251,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
         // 15초마다 헬스체크 및 메트릭 수집
         Flux.interval(Duration.ofSeconds(15))
                 .doOnNext(tick -> {
-                    log.debug("메트릭 및 헬스 모니터링 시작 ({})", tick);
+                    log.info("메트릭 및 헬스 모니터링 시작 ({})", tick);
                     performHealthAndMetricsCheck();
                 })
                 .subscribe();
@@ -267,7 +268,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                     collectLoadMetrics(instance);
                 }
             } catch (Exception e) {
-                log.debug("인스턴스 {} 모니터링 실패: {}", instance.getInstanceId(), e.getMessage());
+                log.error("인스턴스 {} 모니터링 실패: {}", instance.getInstanceId(), e.getMessage());
             }
         });
     }
@@ -359,7 +360,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
 
         return reactiveRedisTemplate.opsForValue()
                 .set(key, healthData, Duration.ofSeconds(CACHE_TTL_SECONDS))
-                .doOnSuccess(v -> log.debug("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
+                .doOnSuccess(v -> log.info("헬스 상태 Redis 저장 성공: {} -> {}", instanceId, isHealthy))
                 .doOnError(e -> log.error("헬스 상태 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
@@ -382,7 +383,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
 
         return reactiveRedisTemplate.opsForValue()
                 .set(key, safeMetrics, Duration.ofSeconds(CACHE_TTL_SECONDS))
-                .doOnSuccess(v -> log.debug("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
+                .doOnSuccess(v -> log.info("메트릭 Redis 저장 성공: {} -> keys: {}", instanceId, safeMetrics.keySet()))
                 .doOnError(e -> log.error("메트릭 Redis 저장 실패: {} -> {}", instanceId, e.getMessage()))
                 .then();
     }
@@ -409,7 +410,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                 .filter(instance -> instance.isHealthy.get())
                 .collect(Collectors.toList());
         
-        log.debug("Redis 미사용 - 로컬 건강한 인스턴스: {}/{}", healthyInstances.size(), staticInstances.size());
+            log.error("Redis 미사용 - 로컬 건강한 인스턴스: {}/{}", healthyInstances.size(), staticInstances.size());
             return Mono.just(healthyInstances);
         }
 
@@ -423,7 +424,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                 .filter(Objects::nonNull)
                 .collectList()
                 .doOnNext(healthyList -> 
-                    log.debug("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), staticInstances.size()));
+                    log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), staticInstances.size()));
 }
 
     /**

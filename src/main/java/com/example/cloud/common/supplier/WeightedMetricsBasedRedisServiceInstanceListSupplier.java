@@ -228,6 +228,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                     log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
                     return 100.0;
                 })
+                .doOnNext(tick -> log.info("부하점수 : {} -> {}", instance.getInstanceId(), tick))
                 .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
                 .onErrorReturn(100.0);
     }

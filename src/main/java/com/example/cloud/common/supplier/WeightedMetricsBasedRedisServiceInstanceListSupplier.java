@@ -1,5 +1,7 @@
 package com.example.cloud.common.supplier;
 
+import com.example.cloud.common.instance.LoadBalancedServiceBatchInstance;
+import com.example.cloud.common.instance.WeightedInstance;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
@@ -11,10 +13,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -97,16 +97,19 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
         }
 
         return Flux.fromIterable(healthyInstances)
-                .flatMap(instance -> 
-                    getInstanceLoadScoreAsync(instance)
-                    // 🔥 LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
-                    .map(score -> Map.entry((ServiceInstance) instance, score))
-            )
-            .collectList()
-            .map(entries -> createWeightedInstanceList(entries))
-            .doOnError(error -> log.error("가중 기반 인스턴스 선택 실패", error))
-            .onErrorReturn(getFallbackInstances());
-}
+                .flatMap(instance ->
+                        getInstanceLoadScoreAsync(instance)
+                                // 🔥 LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
+                                .map(score -> Map.entry((ServiceInstance) instance, score))
+                )
+                .collectList()
+                .map(this::createWeightedInstanceList)
+                .doOnError(error -> log.error("가중 기반 인스턴스 선택 실패", error))
+                .onErrorResume(error -> {
+                    log.warn("에러 발생으로 인한 Fallback 사용: {}", error.getMessage());
+                    return Mono.just(getFallbackInstances());  // 🔥 이제 에러 시에만 실행!
+                });
+    }
 
     /**
      * 🎯 부하점수 기반 가중 리스트 생성 - 제네릭 타입 명시
@@ -122,21 +125,21 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                 .map(entry -> {
                     ServiceInstance instance = entry.getKey();
                     double loadScore = entry.getValue();
-                    
+
                     // 가중치 계산: 부하점수가 낮을수록 높은 가중치
                     double weight = calculateWeight(loadScore);
-                    
+
                     return new WeightedInstance(instance, loadScore, weight);
                 })
-                .sorted(Comparator.comparingDouble(wi -> wi.loadScore)) // 점수순 정렬
+                .sorted(Comparator.comparingDouble(WeightedInstance::loadScore)) // 점수순 정렬
                 .collect(Collectors.toList());
 
         // 가중치에 따른 인스턴스 복제 리스트 생성
         List<ServiceInstance> weightedList = createWeightedList(weightedInstances);
-        
+
         // 로그 출력
         logWeightedSelection(weightedInstances, weightedList.size());
-        
+
         return weightedList;
     }
 
@@ -146,7 +149,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
     private double calculateWeight(double loadScore) {
         // 기본 역수 방식: 낮은 점수 = 높은 가중치
         double baseWeight = 100.0 / Math.max(loadScore, 10.0);
-        
+
         // 최소/최대 가중치 제한
         return Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, baseWeight));
     }
@@ -156,19 +159,19 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
      */
     private List<ServiceInstance> createWeightedList(List<WeightedInstance> weightedInstances) {
         List<ServiceInstance> result = new ArrayList<>();
-        
+
         for (WeightedInstance wi : weightedInstances) {
-            int copies = (int) Math.round(wi.weight);
+            int copies = (int) Math.round(wi.weight());
             for (int i = 0; i < copies; i++) {
-                result.add(wi.instance);
+                result.add(wi.instance());
             }
         }
-        
+
         // 최소 1개는 보장
         if (result.isEmpty() && !weightedInstances.isEmpty()) {
-            result.add(weightedInstances.get(0).instance);
+            result.add(weightedInstances.get(0).instance());
         }
-        
+
         return result;
     }
 
@@ -178,32 +181,32 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
     private void logWeightedSelection(List<WeightedInstance> weightedInstances, int totalCopies) {
         String weightInfo = weightedInstances.stream()
                 .map(wi -> {
-                    int copies = (int)Math.round(wi.weight);
+                    int copies = (int) Math.round(wi.weight());
                     double percentage = totalCopies > 0 ? (copies * 100.0) / totalCopies : 0.0;
-                    return String.format("%s(점수:%.1f,가중:%.1f,복사:%d,비율:%.1f%%)", 
-                        wi.instance.getInstanceId(), 
-                        wi.loadScore, 
-                        wi.weight,
-                        copies,
-                        percentage);
-            })
-            .collect(Collectors.joining(" | "));
-    
-    log.info("🎯 가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
-    
-    // 효율성 평가
-    double avgLoadScore = weightedInstances.stream()
-            .mapToDouble(wi -> wi.loadScore)
-            .average()
-            .orElse(100.0);
-    
-    String efficiency = avgLoadScore < 30 ? "EXCELLENT" :
-                       avgLoadScore < 50 ? "GOOD" :
-                       avgLoadScore < 70 ? "FAIR" : "POOR";
-    
-    // 🔥 Java 스타일 포맷팅으로 수정
-    log.info("🔍 로드밸런싱 효율성: {} (평균점수: {})", efficiency, String.format("%.1f", avgLoadScore));
-}
+                    return String.format("%s(점수:%.1f,가중:%.1f,복사:%d,비율:%.1f%%)",
+                            wi.instance().getInstanceId(),
+                            wi.loadScore(),
+                            wi.weight(),
+                            copies,
+                            percentage);
+                })
+                .collect(Collectors.joining(" | "));
+
+        log.info("🎯 가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
+
+        // 효율성 평가
+        double avgLoadScore = weightedInstances.stream()
+                .mapToDouble(wi -> wi.loadScore())
+                .average()
+                .orElse(100.0);
+
+        String efficiency = avgLoadScore < 30 ? "EXCELLENT" :
+                avgLoadScore < 50 ? "GOOD" :
+                        avgLoadScore < 70 ? "FAIR" : "POOR";
+
+        // 🔥 Java 스타일 포맷팅으로 수정
+        log.info("🔍 로드밸런싱 효율성: {} (평균점수: {})", efficiency, String.format("%.1f", avgLoadScore));
+    }
 
     /**
      * 🔥 비동기로 부하점수 조회 - 매개변수 타입 수정
@@ -240,9 +243,9 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
         if (!staticInstances.isEmpty()) {
             // 🔥 LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
             List<ServiceInstance> fallbackList = staticInstances.stream()
-                .map(instance -> (ServiceInstance) instance)
-                .collect(Collectors.toList());
-        
+                    .map(instance -> (ServiceInstance) instance)
+                    .collect(Collectors.toList());
+
             log.info("🔄 Fallback 인스턴스 사용: {} 개", fallbackList.size());
             return fallbackList;
         }
@@ -409,9 +412,9 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
         if (reactiveRedisTemplate == null) {
             // Redis가 없으면 로컬 상태 기반으로 필터링
             List<LoadBalancedServiceBatchInstance> healthyInstances = staticInstances.stream()
-                .filter(instance -> instance.isHealthy.get())
-                .collect(Collectors.toList());
-        
+                    .filter(instance -> instance.isHealthy.get())
+                    .collect(Collectors.toList());
+
             log.error("Redis 미사용 - 로컬 건강한 인스턴스: {}/{}", healthyInstances.size(), staticInstances.size());
             return Mono.just(healthyInstances);
         }
@@ -425,9 +428,9 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                 .flatMap(mono -> mono)
                 .filter(Objects::nonNull)
                 .collectList()
-                .doOnNext(healthyList -> 
-                    log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), staticInstances.size()));
-}
+                .doOnNext(healthyList ->
+                        log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), staticInstances.size()));
+    }
 
     /**
      * 🔥 Redis에서 개별 인스턴스 헬스 상태 확인 - 반환 타입 명확화
@@ -455,7 +458,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                     // 에러 시 로컬 상태 기반으로 결정
                     return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
                 });
-}
+    }
 
     /**
      * 🔥 Redis에서 모든 인스턴스의 메트릭 정보 조회
@@ -505,10 +508,10 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
                                 // Redis에서 메트릭 정보 추가
                                 Map<String, Object> metrics = allMetrics.get(instance.getInstanceId());
                                 if (metrics != null) {
-                                    double loadScore = metrics.get("loadScore") instanceof Number ? 
-                                        ((Number) metrics.get("loadScore")).doubleValue() : 100.0;
+                                    double loadScore = metrics.get("loadScore") instanceof Number ?
+                                            ((Number) metrics.get("loadScore")).doubleValue() : 100.0;
                                     double weight = calculateWeight(loadScore);
-                                    
+
                                     instanceInfo.put("loadScore", loadScore);
                                     instanceInfo.put("weight", weight);
                                     instanceInfo.put("cpuUsage", metrics.get("cpuUsage"));
@@ -554,86 +557,17 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
      */
     public Map<String, Map<String, Object>> getAllMetrics() {
         Map<String, Map<String, Object>> result = getAllMetricsFromRedis()
-            .block(Duration.ofSeconds(2));
-    return result != null ? result : new HashMap<>();
-}
+                .block(Duration.ofSeconds(2));
+        return result != null ? result : new HashMap<>();
+    }
 
-public Map<String, Object> getDetailedStatus() {
-    Map<String, Object> result = getDetailedStatusFromRedis()
-            .block(Duration.ofSeconds(2));
-    return result != null ? result : new HashMap<>();
-}
-
-    /**
-     * 🔧 가중치 정보를 담는 내부 클래스
-     */
-    private static class WeightedInstance {
-        final ServiceInstance instance;
-        final double loadScore;
-        final double weight;
-        
-        WeightedInstance(ServiceInstance instance, double loadScore, double weight) {
-            this.instance = instance;
-            this.loadScore = loadScore;
-            this.weight = weight;
-        }
+    public Map<String, Object> getDetailedStatus() {
+        Map<String, Object> result = getDetailedStatusFromRedis()
+                .block(Duration.ofSeconds(2));
+        return result != null ? result : new HashMap<>();
     }
 
     /**
-     * LoadBalancer 지원 ServiceInstance 구현체
-     */
-    private static class LoadBalancedServiceBatchInstance implements ServiceInstance {
-        private final String instanceId;
-        private final String host;
-        private final int port;
-        private final AtomicBoolean isHealthy = new AtomicBoolean(true);
-
-        public LoadBalancedServiceBatchInstance(String instanceId, String host, int port) {
-            this.instanceId = instanceId;
-            this.host = host;
-            this.port = port;
-        }
-
-        @Override
-        public String getServiceId() {
-            return "service-batch";
-        }
-
-        @Override
-        public String getInstanceId() {
-            return instanceId;
-        }
-
-        @Override
-        public String getHost() {
-            return host;
-        }
-
-        @Override
-        public int getPort() {
-            return port;
-        }
-
-        @Override
-        public boolean isSecure() {
-            return false;
-        }
-
-        @Override
-        public URI getUri() {
-            return URI.create("http://" + host + ":" + port);
-        }
-
-        @Override
-        public Map<String, String> getMetadata() {
-            return Map.of(
-                    "zone", "default",
-                    "healthy", String.valueOf(isHealthy.get()),
-                    "loadBalanced", "true",
-                    "metricsEnabled", "true",
-                    "cacheType", "REDIS",
-                    "strategy", "WEIGHTED"
-            );
-        }
-    }
+         * 🔧 가중치 정보를 담는 내부 클래스
+         */
 }

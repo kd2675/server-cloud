@@ -144,9 +144,14 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
     }
 
     /**
-     * 🔧 부하점수를 가중치로 변환
+     * 🔧 부하점수를 가중치로 변환 - NaN 안전 처리
      */
     private double calculateWeight(double loadScore) {
+        // 🔥 NaN, 무한대, 음수 값 사전 처리
+        if (Double.isNaN(loadScore) || Double.isInfinite(loadScore) || loadScore < 0) {
+            return MIN_WEIGHT; // 기본 최소 가중치 반환
+        }
+
         // 기본 역수 방식: 낮은 점수 = 높은 가중치
         double baseWeight = 100.0 / Math.max(loadScore, 10.0);
 
@@ -433,31 +438,60 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
     }
 
     /**
-     * 🔥 Redis에서 개별 인스턴스 헬스 상태 확인 - 반환 타입 명확화
+     * 🔥 Redis에서 개별 인스턴스 헬스 상태 확인 - 완전 NPE 방지 버전
      */
     private Mono<LoadBalancedServiceBatchInstance> checkInstanceHealthInRedis(LoadBalancedServiceBatchInstance instance) {
+        // 🔥 reactiveRedisTemplate이 null이면 즉시 로컬 상태 반환
+        if (reactiveRedisTemplate == null) {
+            return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+        }
+
         String healthKey = HEALTH_KEY_PREFIX + instance.getInstanceId();
 
-        return reactiveRedisTemplate.opsForValue()
-                .get(healthKey)
-                .cast(Map.class)
-                .map(healthData -> {
-                    Boolean isHealthy = (Boolean) healthData.get("isHealthy");
-                    if (Boolean.TRUE.equals(isHealthy)) {
-                        instance.isHealthy.set(true);
-                        return instance; // 🔥 그대로 LoadBalancedServiceBatchInstance 반환
-                    }
-                    return null;
-                })
-                .switchIfEmpty(Mono.fromSupplier(() -> {
-                    // Redis에 데이터가 없으면 로컬 상태 사용
-                    return instance.isHealthy.get() ? instance : null;
-                }))
-                .onErrorResume(error -> {
-                    log.error("Redis에서 헬스 상태 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage());
-                    // 에러 시 로컬 상태 기반으로 결정
-                    return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
-                });
+        try {
+            // 🔥 NPE 방지: opsForValue()도 null일 수 있음
+            if (reactiveRedisTemplate.opsForValue() == null) {
+                log.warn("ReactiveValueOperations가 null - 로컬 상태 사용: {}", instance.getInstanceId());
+                return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+            }
+
+            // 🔥 null 안전 처리를 위해 defer 사용
+            return Mono.defer(() -> {
+                        try {
+                            Mono<Object> redisMono = reactiveRedisTemplate.opsForValue().get(healthKey);
+                            // 🔥 Redis 결과가 null인 경우 처리
+                            if (redisMono == null) {
+                                return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+                            }
+                            return redisMono;
+                        } catch (Exception e) {
+                            log.error("Redis get() 호출 중 예외: {}", e.getMessage());
+                            return Mono.empty();
+                        }
+                    })
+                    .cast(Map.class)
+                    .map(healthData -> {
+                        Boolean isHealthy = (Boolean) healthData.get("isHealthy");
+                        if (Boolean.TRUE.equals(isHealthy)) {
+                            instance.isHealthy.set(true);
+                            return instance;
+                        }
+                        return null;
+                    })
+                    .filter(Objects::nonNull) // null 값 필터링
+                    .switchIfEmpty(Mono.defer(() -> {
+                        // 건강하지 않거나 데이터가 없는 경우
+                        log.warn("Redis에서 헬스 데이터 없음 ({}), 로컬 상태 사용", instance.getInstanceId());
+                        return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+                    }))
+                    .onErrorResume(error -> {
+                        log.error("Redis에서 헬스 상태 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage());
+                        return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+                    });
+        } catch (Exception e) {
+            log.error("Redis 헬스체크 중 예외 발생 ({}): {}", instance.getInstanceId(), e.getMessage());
+            return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
+        }
     }
 
     /**

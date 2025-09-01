@@ -113,6 +113,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
      */
     private List<ServiceInstance> createWeightedInstanceList(List<Map.Entry<ServiceInstance, Double>> entries) {
         if (entries.isEmpty()) {
+            log.warn("entries in null");
             return getFallbackInstances();
         }
 

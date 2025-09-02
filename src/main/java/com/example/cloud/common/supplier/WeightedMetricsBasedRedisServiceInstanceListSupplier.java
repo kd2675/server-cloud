@@ -18,7 +18,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
-@Component  // 필요시 활성화
 public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements ServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;

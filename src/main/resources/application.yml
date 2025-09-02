@@ -2,7 +2,7 @@ spring:
   main:
     web-application-type: reactive
   application:
-    name: cloud
+    name: server-cloud
   profiles:
     active: local
     group:
@@ -21,6 +21,10 @@ spring:
       # 로드밸런싱 설정
       loadbalancer:
         use404: true
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
     loadbalancer:
       ribbon:
         enabled: false  # Ribbon 비활성화, Spring Cloud LoadBalancer 사용

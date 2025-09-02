@@ -51,7 +51,12 @@ public class CloudConfig {
     private String serverUrlServiceBatch;
 
     // LoadBalancer용 URI 추가
-    private static final String LOAD_BALANCED_SERVICE_BATCH = "lb://service-batch";
+    private static final String LB_SERVICE_BATCH = "lb://service-batch";
+    private static final String LB_SERVER_MEMBER = "lb://server-member";
+    private static final String LB_SERVER_FILE = "lb://server-file";
+    private static final String LB_SERVICE_COCOIN = "lb://service-cocoin";
+    private static final String LB_SERVER_BATCH = "lb://server-batch";
+
 
 
     private final HeaderFilter headerFilter;
@@ -180,7 +185,7 @@ public class CloudConfig {
                                         .setSeries(HttpStatus.Series.SERVER_ERROR)
                                 )
                         )
-                        .uri(LOAD_BALANCED_SERVICE_BATCH) // 로드밸런서 URI 사용
+                        .uri(LB_SERVICE_BATCH) // 로드밸런서 URI 사용
                 )
 
                 .build();

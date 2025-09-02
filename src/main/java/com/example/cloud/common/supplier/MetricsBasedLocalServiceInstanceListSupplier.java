@@ -16,7 +16,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Slf4j
-//@Component
 public class MetricsBasedLocalServiceInstanceListSupplier implements ServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;

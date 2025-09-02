@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 @Slf4j
-//@Component
 public class ServiceBatchInstanceListSupplier implements ServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final ConfigurableApplicationContext context;

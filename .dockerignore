@@ -1,8 +1,6 @@
-server-api/
-server-file/
-server-batch/
-server-member/
-server-socket/
-service-batch/
-service-cocoin/
-front-*/
+*/build/
+*/logs/
+.env
+*/.idea/
+*.iml
+*.log

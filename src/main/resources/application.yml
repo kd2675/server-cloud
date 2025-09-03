@@ -73,6 +73,8 @@ management:
     health:
       show-details: always
   health:
+    info:
+      enabled: true  # ✅ info 엔드포인트 명시적 활성화
     defaults:
       enabled: true
     redis:

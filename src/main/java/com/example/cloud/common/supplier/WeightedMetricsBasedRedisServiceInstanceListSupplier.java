@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
-public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements ServiceInstanceListSupplier {
+public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements ExtendedServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;
     private final List<LoadBalancedServiceBatchInstance> staticInstances;
@@ -594,6 +594,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ser
         return result != null ? result : new HashMap<>();
     }
 
+    @Override
     public Map<String, Object> getDetailedStatus() {
         Map<String, Object> result = getDetailedStatusFromRedis()
                 .block(Duration.ofSeconds(2));

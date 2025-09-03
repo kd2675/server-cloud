@@ -1,11 +1,14 @@
 package com.example.cloud.common.health.act;
 
+import com.example.cloud.common.supplier.EurekaBasedServiceInstanceListSupplier;
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,8 +22,8 @@ import java.util.Map;
 @Slf4j
 public class HealthController implements HealthIndicator {
     // LoadBalancer 상태 조회를 위한 Supplier 주입
-    @Autowired(required = false)
-    private WeightedMetricsBasedRedisServiceInstanceListSupplier loadBalancerSupplier;
+
+    private final ExtendedServiceInstanceListSupplier loadBalancerSupplier;
 
     /**
      * Spring Boot Actuator HealthIndicator 구현

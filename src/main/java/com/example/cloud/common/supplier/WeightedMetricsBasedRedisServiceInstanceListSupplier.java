@@ -5,10 +5,9 @@ import com.example.cloud.common.instance.WeightedInstance;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -18,6 +17,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
+@Service
 public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements ExtendedServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;

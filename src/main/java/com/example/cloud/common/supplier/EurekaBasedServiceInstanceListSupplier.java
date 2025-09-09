@@ -5,13 +5,17 @@ import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
-public class EurekaBasedServiceInstanceListSupplier implements ServiceInstanceListSupplier {
+public class EurekaBasedServiceInstanceListSupplier implements ExtendedServiceInstanceListSupplier {
     
     private final String serviceId = "service-batch";
     private final DiscoveryClient discoveryClient;
@@ -59,4 +63,84 @@ public class EurekaBasedServiceInstanceListSupplier implements ServiceInstanceLi
             return List.of();
         }
     }
+
+    @Override
+    public Map<String, Object> getDetailedStatus() {
+        Map<String, Object> status = new HashMap<>();
+
+        try {
+            List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
+
+            // 인스턴스별 기본 정보
+            List<Map<String, Object>> instanceDetails = instances.stream()
+                    .map(this::createInstanceDetail)
+                    .collect(Collectors.toList());
+
+            // 전체 요약 정보
+            status.put("serviceId", serviceId);
+            status.put("totalInstances", instances.size());
+            status.put("discoveryClient", discoveryClient.getClass().getSimpleName());
+            status.put("instances", instanceDetails);
+            status.put("timestamp", System.currentTimeMillis());
+
+            // Eureka 관련 추가 정보
+            status.put("eurekaInfo", getEurekaInfo());
+
+            log.debug("📊 Generated detailed status for {} instances", instances.size());
+
+        } catch (Exception e) {
+            log.error("❌ Failed to get detailed status: {}", e.getMessage());
+            status.put("error", "Failed to retrieve status: " + e.getMessage());
+            status.put("serviceId", serviceId);
+            status.put("totalInstances", 0);
+            status.put("instances", List.of());
+            status.put("timestamp", System.currentTimeMillis());
+        }
+
+        return status;
+    }
+
+    /**
+     * 개별 인스턴스의 상세 정보 생성
+     */
+    private Map<String, Object> createInstanceDetail(ServiceInstance instance) {
+        Map<String, Object> detail = new HashMap<>();
+        detail.put("instanceId", instance.getInstanceId());
+        detail.put("serviceId", instance.getServiceId());
+        detail.put("host", instance.getHost());
+        detail.put("port", instance.getPort());
+        detail.put("secure", instance.isSecure());
+        detail.put("uri", instance.getUri().toString());
+        detail.put("metadata", instance.getMetadata());
+
+        // Eureka 특정 정보 (가능한 경우)
+        detail.put("scheme", instance.getScheme());
+
+        return detail;
+    }
+
+    /**
+     * Eureka 관련 추가 정보
+     */
+    private Map<String, Object> getEurekaInfo() {
+        Map<String, Object> eurekaInfo = new HashMap<>();
+
+        try {
+            // 전체 서비스 목록
+            List<String> services = discoveryClient.getServices();
+            eurekaInfo.put("totalServices", services.size());
+            eurekaInfo.put("allServices", services);
+
+            // Discovery Client 정보
+            eurekaInfo.put("description", discoveryClient.description());
+            eurekaInfo.put("order", discoveryClient.getOrder());
+
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to get additional Eureka info: {}", e.getMessage());
+            eurekaInfo.put("error", "Unable to retrieve Eureka info");
+        }
+
+        return eurekaInfo;
+    }
+
 }

@@ -1,5 +1,6 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
 import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +45,7 @@ class CascadeFailureTest extends WeightedMetricsTestBase {
 
         // When - 연쇄 실패 상황에서 supplier 동작 확인
         try {
-            WeightedMetricsBasedRedisServiceInstanceListSupplier failSupplier = 
+            ExtendedServiceInstanceListSupplier failSupplier =
                 new WeightedMetricsBasedRedisServiceInstanceListSupplier(failContext, reactiveRedisTemplate);
             
             Flux<List<ServiceInstance>> result = failSupplier.get();

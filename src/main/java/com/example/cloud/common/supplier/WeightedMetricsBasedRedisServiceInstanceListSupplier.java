@@ -47,21 +47,17 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
 
         // application-local.yml에서 포트 정보 읽기
         String serverHost = context.getEnvironment().getProperty("path.service.batch.host");
-        int serverPort1 = context.getEnvironment().getProperty("path.service.batch.port1", Integer.class);
-        int serverPort2 = context.getEnvironment().getProperty("path.service.batch.port2", Integer.class);
         int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
 
-        // 정적 인스턴스 정의
+        // 백업 정적 인스턴스 정의
         this.staticInstances = Arrays.asList(
-                new LoadBalancedServiceBatchInstance("service-batch-1", serverHost, serverPort1),
-                new LoadBalancedServiceBatchInstance("service-batch-2", serverHost, serverPort2),
                 new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
-        log.info("🎯 WeightedMetricsBasedLoadBalancer 초기화 완료 (Redis: {}, 전략: {}) - {}:{}|{}:{}|{}:{}",
+        log.info("🎯 WeightedMetricsBasedLoadBalancer 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
                 reactiveRedisTemplate != null,
                 LOAD_BALANCING_STRATEGY,
-                serverHost, serverPort1, serverHost, serverPort2, serverHost, serverPort3);
+                serverHost, serverPort3);
 
         // 백그라운드 모니터링 시작
         startMetricsAndHealthMonitoring();
@@ -600,8 +596,4 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                 .block(Duration.ofSeconds(2));
         return result != null ? result : new HashMap<>();
     }
-
-    /**
-         * 🔧 가중치 정보를 담는 내부 클래스
-         */
 }

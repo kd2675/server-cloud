@@ -1,14 +1,10 @@
 package com.example.cloud.common.health.act;
 
-import com.example.cloud.common.supplier.EurekaBasedServiceInstanceListSupplier;
 import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 

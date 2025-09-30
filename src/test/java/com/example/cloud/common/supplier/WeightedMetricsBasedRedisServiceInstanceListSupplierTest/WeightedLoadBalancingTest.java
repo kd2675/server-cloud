@@ -15,7 +15,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.when;
 
 @DisplayName("가중치 기반 로드밸런싱 테스트")
@@ -24,15 +23,15 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
     @Test
     @DisplayName("건강한 인스턴스들에 대한 가중치 기반 로드밸런싱")
     void testGetWithHealthyInstancesWeightedBalancing() {
-        // Given - 다양한 부하 점수의 인스턴스들
+        // Given - 정확한 Redis 키로 Mock 설정
         Map<String, Object> health1 = createHealthData(true);
-        Map<String, Object> metrics1 = createMetricsData(20.0, 30.0, 40.0); // 낮은 부하 = 높은 가중치
+        Map<String, Object> metrics1 = createMetricsData(20.0, 30.0, 40.0); // weight 5
 
         Map<String, Object> health2 = createHealthData(true);
-        Map<String, Object> metrics2 = createMetricsData(80.0, 70.0, 85.0); // 높은 부하 = 낮은 가중치
+        Map<String, Object> metrics2 = createMetricsData(80.0, 70.0, 85.0); // weight 1.25
 
         Map<String, Object> health3 = createHealthData(true);
-        Map<String, Object> metrics3 = createMetricsData(50.0, 60.0, 55.0); // 중간 부하 = 중간 가중치
+        Map<String, Object> metrics3 = createMetricsData(50.0, 60.0, 55.0); // weight 2
 
         setupRedisResponses(health1, metrics1, health2, metrics2, health3, metrics3);
 
@@ -44,7 +43,11 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
                 .expectNextMatches(instances -> {
                     assertThat(instances).isNotEmpty();
                     
-                    // 가중치 기반으로 낮은 부하의 인스턴스가 더 많이 포함되어야 함
+                    // 가중치 계산 검증
+                    // batch-1 (20.0): 100.0/20.0 = 5.0 -> 5개
+                    // batch-2 (80.0): 100.0/80.0 = 1.25 -> 1개
+                    // batch-3 (50.0): 100.0/50.0 = 2.0 -> 2개
+                    
                     long batch1Count = instances.stream()
                             .filter(inst -> "service-batch-1".equals(inst.getInstanceId()))
                             .count();
@@ -55,9 +58,9 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
                             .filter(inst -> "service-batch-3".equals(inst.getInstanceId()))
                             .count();
 
-                    // 부하가 낮은 인스턴스(batch-1)가 가장 많이, 부하가 높은 인스턴스(batch-2)가 가장 적게
-                    assertThat(batch1Count).isGreaterThanOrEqualTo(batch3Count);
-                    assertThat(batch3Count).isGreaterThanOrEqualTo(batch2Count);
+                    assertThat(batch1Count).isEqualTo(5);
+                    assertThat(batch2Count).isEqualTo(1);
+                    assertThat(batch3Count).isEqualTo(2);
 
                     return true;
                 })
@@ -68,12 +71,21 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
     @ValueSource(doubles = {10.0, 25.0, 50.0, 75.0, 95.0})
     @DisplayName("다양한 부하점수에 대한 가중치 계산")
     void testWeightCalculationForVariousLoadScores(double loadScore) {
-        // Given - 특정 부하점수의 인스턴스
+        // Given - 정확한 Redis 키로 Mock 설정
         Map<String, Object> healthData = createHealthData(true);
         Map<String, Object> metricsData = createMetricsData(loadScore, 50.0, 60.0);
 
-        when(reactiveValueOperations.get(anyString()))
-                .thenReturn(Mono.just(healthData), Mono.just(metricsData));
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-1"))
+                .thenReturn(Mono.just(healthData));
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-1"))
+                .thenReturn(Mono.just(metricsData));
+        
+        // 나머지는 unhealthy
+        Map<String, Object> unhealthyData = createHealthData(false);
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-2"))
+                .thenReturn(Mono.just(unhealthyData));
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-3"))
+                .thenReturn(Mono.just(unhealthyData));
 
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
@@ -83,10 +95,16 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
                 .expectNextMatches(instances -> {
                     assertThat(instances).isNotEmpty();
                     
-                    // 낮은 부하점수일수록 더 많은 인스턴스가 생성되어야 함
-                    if (loadScore < 30.0) {
-                        assertThat(instances.size()).isGreaterThanOrEqualTo(3);
-                    }
+                    // 가중치 계산
+                    double expectedWeight = 100.0 / Math.max(loadScore, 10.0);
+                    expectedWeight = Math.max(1.0, Math.min(10.0, expectedWeight));
+                    int expectedCopies = (int) Math.round(expectedWeight);
+                    
+                    long actualCount = instances.stream()
+                            .filter(inst -> "service-batch-1".equals(inst.getInstanceId()))
+                            .count();
+                    
+                    assertThat(actualCount).isEqualTo(expectedCopies);
                     
                     return true;
                 })
@@ -96,17 +114,17 @@ class WeightedLoadBalancingTest extends WeightedMetricsTestBase {
     private void setupRedisResponses(Map<String, Object> health1, Map<String, Object> metrics1,
                                    Map<String, Object> health2, Map<String, Object> metrics2,
                                    Map<String, Object> health3, Map<String, Object> metrics3) {
-        when(reactiveValueOperations.get(contains("health:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-1"))
                 .thenReturn(Mono.just(health1));
-        when(reactiveValueOperations.get(contains("metrics:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-1"))
                 .thenReturn(Mono.just(metrics1));
-        when(reactiveValueOperations.get(contains("health:service-batch-2")))
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-2"))
                 .thenReturn(Mono.just(health2));
-        when(reactiveValueOperations.get(contains("metrics:service-batch-2")))
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-2"))
                 .thenReturn(Mono.just(metrics2));
-        when(reactiveValueOperations.get(contains("health:service-batch-3")))
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-3"))
                 .thenReturn(Mono.just(health3));
-        when(reactiveValueOperations.get(contains("metrics:service-batch-3")))
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-3"))
                 .thenReturn(Mono.just(metrics3));
     }
 }

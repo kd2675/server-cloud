@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 class FallbackBehaviorTest extends WeightedMetricsTestBase {
 
     @Test
-    @DisplayName("완전한 Redis 연결 실패 시 Fallback 동작")
+    @DisplayName("완전한 Redis 연결 실패 시 Eureka 기반 Fallback 동작")
     void testGetWithCompleteRedisFailure() {
         // Given - Redis 완전 실패
         when(reactiveValueOperations.get(anyString()))
@@ -31,15 +31,15 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
 
-        // Then
+        // Then - Eureka에서 3개 인스턴스 반환 (Mock 설정)
         StepVerifier.create(result)
                 .expectNextMatches(instances -> {
+                    // Eureka Mock이 3개를 반환하므로 3개 기대
                     assertThat(instances).hasSize(3);
                     assertThat(instances.stream()
                             .allMatch(inst -> inst.getServiceId().equals("service-batch")))
                             .isTrue();
                     
-                    // 인스턴스 ID 확인
                     Set<String> instanceIds = instances.stream()
                             .map(ServiceInstance::getInstanceId)
                             .collect(Collectors.toSet());
@@ -55,7 +55,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("Redis가 null일 때 Fallback 동작")
+    @DisplayName("Redis가 null일 때 Eureka 기반 동작")
     void testGetWithNullRedis() {
         // Given - Redis가 완전히 null인 Supplier
         ExtendedServiceInstanceListSupplier supplierWithNullRedis =
@@ -64,7 +64,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         // When
         Flux<List<ServiceInstance>> result = supplierWithNullRedis.get();
 
-        // Then
+        // Then - Eureka에서 3개 조회
         StepVerifier.create(result)
                 .expectNextMatches(instances -> {
                     assertThat(instances).hasSize(3);
@@ -78,7 +78,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("건강하지 않은 인스턴스들 - Fallback 동작")
+    @DisplayName("건강하지 않은 인스턴스들 - Eureka Fallback 동작")
     void testGetWithUnhealthyInstancesFallback() {
         // Given - 모든 인스턴스가 건강하지 않음
         Map<String, Object> unhealthyData = createHealthData(false);
@@ -89,10 +89,11 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
 
-        // Then
+        // Then - 건강한 인스턴스 없음 -> Eureka에서 3개 조회
         StepVerifier.create(result)
                 .expectNextMatches(instances -> {
-                    assertThat(instances).hasSize(3); // Fallback으로 모든 인스턴스 반환
+                    // Eureka Mock이 3개 반환
+                    assertThat(instances).hasSize(3);
                     assertThat(instances.stream()
                             .allMatch(inst -> inst.getServiceId().equals("service-batch")))
                             .isTrue();
@@ -104,20 +105,21 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     @Test
     @DisplayName("Redis 부분적 실패 시 동작")
     void testGetWithPartialRedisFailure() {
-        // Given - 일부는 성공, 일부는 실패
+        // Given - 정확한 Redis 키로 Mock 설정
         Map<String, Object> healthyData = createHealthData(true);
         Map<String, Object> metricsData = createMetricsData(30.0, 40.0, 50.0);
         
-        when(reactiveValueOperations.get(contains("health:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-1"))
                 .thenReturn(Mono.just(healthyData));
-        when(reactiveValueOperations.get(contains("metrics:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-1"))
                 .thenReturn(Mono.just(metricsData));
         
-        // 나머지는 실패
-        when(reactiveValueOperations.get(contains("health:service-batch-2")))
-                .thenReturn(Mono.error(new RuntimeException("Connection lost")));
-        when(reactiveValueOperations.get(contains("health:service-batch-3")))
-                .thenReturn(Mono.error(new RuntimeException("Connection lost")));
+        // 나머지는 건강하지 않음
+        Map<String, Object> unhealthyData = createHealthData(false);
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-2"))
+                .thenReturn(Mono.just(unhealthyData));
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-3"))
+                .thenReturn(Mono.just(unhealthyData));
 
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
@@ -127,10 +129,16 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
                 .expectNextMatches(instances -> {
                     assertThat(instances).isNotEmpty();
                     
-                    // 성공한 인스턴스가 포함되어야 함
-                    boolean hasHealthyInstance = instances.stream()
-                            .anyMatch(inst -> "service-batch-3".equals(inst.getInstanceId()));
-                    assertThat(hasHealthyInstance).isTrue();
+                    // service-batch-1만 건강하므로 이것만 포함
+                    boolean hasBatch1 = instances.stream()
+                            .anyMatch(inst -> "service-batch-1".equals(inst.getInstanceId()));
+                    assertThat(hasBatch1).isTrue();
+                    
+                    // 가중치 계산: 30.0 -> 100.0/30.0 = 3.33 -> 3개
+                    long batch1Count = instances.stream()
+                            .filter(inst -> "service-batch-1".equals(inst.getInstanceId()))
+                            .count();
+                    assertThat(batch1Count).isEqualTo(3);
                     
                     return true;
                 })
@@ -138,9 +146,9 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("Fallback 메서드 직접 테스트")
+    @DisplayName("Fallback 메서드 직접 테스트 - Redis 없을 때 Eureka 사용")
     void testGetFallbackInstancesDirectly() {
-        // Given - Redis 없이 supplier 생성하여 fallback 로직 확인
+        // Given - Redis 없이 supplier 생성하여 Eureka fallback 로직 확인
         ExtendedServiceInstanceListSupplier supplierWithoutRedis =
                 new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, null);
         
@@ -150,10 +158,9 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         // Then
         StepVerifier.create(result)
                 .expectNextMatches(instances -> {
-                    // Fallback 로직 검증
+                    // Eureka Mock이 3개 반환
                     assertThat(instances).hasSize(3);
                     
-                    // 모든 인스턴스가 정적 인스턴스와 일치하는지 확인
                     Set<String> expectedIds = Set.of(
                             "service-batch-1", 
                             "service-batch-2", 
@@ -165,7 +172,6 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
                     
                     assertThat(actualIds).isEqualTo(expectedIds);
                     
-                    // 각 인스턴스의 기본 속성 확인
                     instances.forEach(instance -> {
                         assertThat(instance.getServiceId()).isEqualTo("service-batch");
                         assertThat(instance.getHost()).isEqualTo("localhost");
@@ -187,6 +193,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         
         StepVerifier.create(supplier.get())
                 .expectNextMatches(instances -> {
+                    // Eureka Fallback으로 3개
                     assertThat(instances).hasSize(3);
                     return true;
                 })

@@ -21,20 +21,21 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
     @Test
     @DisplayName("부분적인 Redis 데이터 누락 처리")
     void testGetWithPartialRedisData() {
-        // Given - 일부 인스턴스만 Redis에 데이터 존재
+        // Given - 정확한 Redis 키로 Mock 설정
         Map<String, Object> health1 = createHealthData(true);
         Map<String, Object> metrics1 = createMetricsData(30.0, 40.0, 50.0);
 
-        when(reactiveValueOperations.get(contains("health:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-1"))
                 .thenReturn(Mono.just(health1));
-        when(reactiveValueOperations.get(contains("metrics:service-batch-1")))
+        when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-1"))
                 .thenReturn(Mono.just(metrics1));
         
-        // 나머지 인스턴스는 데이터 없음
-//        when(reactiveValueOperations.get(contains("health:service-batch-2")))
-//                .thenReturn(Mono.empty());
-//        when(reactiveValueOperations.get(contains("health:service-batch-3")))
-//                .thenReturn(Mono.empty());
+        // 나머지는 건강하지 않음
+        Map<String, Object> unhealthyData = createHealthData(false);
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-2"))
+                .thenReturn(Mono.just(unhealthyData));
+        when(reactiveValueOperations.get("loadbalancer:health:service-batch-3"))
+                .thenReturn(Mono.just(unhealthyData));
 
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
@@ -44,10 +45,16 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
                 .expectNextMatches(instances -> {
                     assertThat(instances).isNotEmpty();
                     
-                    // 데이터가 있는 인스턴스가 포함되어야 함
+                    // batch-1만 건강하므로 이것만 포함
                     boolean hasBatch1 = instances.stream()
                             .anyMatch(inst -> "service-batch-1".equals(inst.getInstanceId()));
                     assertThat(hasBatch1).isTrue();
+                    
+                    // 가중치 계산: 30.0 -> 100.0/30.0 = 3.33 -> 3개
+                    long batch1Count = instances.stream()
+                            .filter(inst -> "service-batch-1".equals(inst.getInstanceId()))
+                            .count();
+                    assertThat(batch1Count).isEqualTo(3);
 
                     return true;
                 })

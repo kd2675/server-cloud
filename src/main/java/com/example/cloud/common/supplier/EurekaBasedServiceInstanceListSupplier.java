@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
-public class EurekaBasedServiceInstanceListSupplier implements ExtendedServiceInstanceListSupplier {
+public class EurekaBasedServiceInstanceListSupplier implements ServiceInstanceListSupplier {
     
     private final String serviceId = "service-batch";
     private final DiscoveryClient discoveryClient;
@@ -64,7 +64,6 @@ public class EurekaBasedServiceInstanceListSupplier implements ExtendedServiceIn
         }
     }
 
-    @Override
     public Map<String, Object> getDetailedStatus() {
         Map<String, Object> status = new HashMap<>();
 

@@ -1,7 +1,7 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
+import com.example.cloud.common.supplier.EurekaWeightedBasedRedisInstanceSupplier;
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.client.ServiceInstance;
@@ -31,10 +31,10 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
                 .thenReturn(Mono.just(metrics1));
         
         // 나머지 인스턴스는 데이터 없음
-        when(reactiveValueOperations.get(contains("health:service-batch-2")))
-                .thenReturn(Mono.empty());
-        when(reactiveValueOperations.get(contains("health:service-batch-3")))
-                .thenReturn(Mono.empty());
+//        when(reactiveValueOperations.get(contains("health:service-batch-2")))
+//                .thenReturn(Mono.empty());
+//        when(reactiveValueOperations.get(contains("health:service-batch-3")))
+//                .thenReturn(Mono.empty());
 
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
@@ -154,8 +154,8 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
     @DisplayName("Redis Template이 null인 경우의 getAllMetricsFromRedis")
     void testGetAllMetricsFromRedisWithNullRedisTemplate() {
         // Given - Redis Template이 null인 Supplier
-        WeightedMetricsBasedRedisServiceInstanceListSupplier supplierWithNullRedis = 
-                new WeightedMetricsBasedRedisServiceInstanceListSupplier(context, null);
+        ExtendedServiceInstanceListSupplier supplierWithNullRedis =
+                new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, null);
 
         // When
         Mono<Map<String, Map<String, Object>>> result = supplierWithNullRedis.getAllMetricsFromRedis();

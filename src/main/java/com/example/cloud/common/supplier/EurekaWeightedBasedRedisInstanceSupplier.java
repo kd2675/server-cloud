@@ -62,7 +62,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                 new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
-        log.info("WeightedMetricsBasedLoadBalancer 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
+        log.info("EurekaWeightedBasedRedisInstanceSupplier 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
                 reactiveRedisTemplate != null,
                 LOAD_BALANCING_STRATEGY,
                 serverHost, serverPort3);
@@ -226,22 +226,33 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
 
         String key = METRICS_KEY_PREFIX + instance.getInstanceId();
 
-        return reactiveRedisTemplate.opsForValue()
-                .get(key)
-                .cast(Map.class)
-                .timeout(Duration.ofSeconds(3))
-                .map(metrics -> {
-                    Object loadScore = metrics.get("loadScore");
-                    if (loadScore instanceof Number) {
-                        double score = ((Number) loadScore).doubleValue();
-                        return score;
-                    }
-                    log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
-                    return 100.0;
-                })
-                .doOnNext(tick -> log.info("부하점수 : {} -> {}", instance.getInstanceId(), tick))
-                .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
-                .onErrorReturn(100.0);
+        try {
+            var valueOps = reactiveRedisTemplate.opsForValue();
+            if (valueOps == null) {
+                return Mono.just(100.0);
+            }
+
+            // get(key)가 null일 수 있으므로 justOrEmpty 사용
+            return reactiveRedisTemplate.opsForValue()
+                    .get(key)
+                    .cast(Map.class)
+                    .timeout(Duration.ofSeconds(3))
+                    .map(metrics -> {
+                        Object loadScore = metrics.get("loadScore");
+                        if (loadScore instanceof Number) {
+                            double score = ((Number) loadScore).doubleValue();
+                            return score;
+                        }
+                        log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
+                        return 100.0;
+                    })
+                    .doOnNext(tick -> log.info("부하점수 : {} -> {}", instance.getInstanceId(), tick))
+                    .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
+                    .onErrorReturn(100.0);
+        } catch (Exception e) {
+            log.error("부하점수 조회 중 예외 ({}) : {}", instance.getInstanceId(), e.getMessage());
+            return Mono.just(100.0);
+        }
     }
 
     /**
@@ -506,6 +517,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     /**
      * Redis에서 모든 인스턴스의 메트릭 정보 조회
      */
+    @Override
     public Mono<Map<String, Map<String, Object>>> getAllMetricsFromRedis() {
         if (reactiveRedisTemplate == null) {
             return Mono.just(new HashMap<>());
@@ -534,6 +546,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     /**
      * 로드밸런서 상태 요약 (가중치 정보 포함)
      */
+    @Override
     public Mono<Map<String, Object>> getDetailedStatusFromRedis() {
         return getAllMetricsFromRedis()
                 .map(allMetrics -> {
@@ -600,6 +613,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     /**
      * 동기 버전 메트릭 조회 - 타입 안전
      */
+    @Override
     public Map<String, Map<String, Object>> getAllMetrics() {
         Map<String, Map<String, Object>> result = getAllMetricsFromRedis()
                 .block(Duration.ofSeconds(2));

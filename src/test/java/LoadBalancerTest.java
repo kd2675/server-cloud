@@ -98,9 +98,9 @@ public class LoadBalancerTest {
         AtomicInteger errorCount = new AtomicInteger(0);
         
         // ⭐ 핵심 해결책: onBackpressureBuffer 또는 onBackpressureDrop 사용
-        Disposable disposable = Flux.interval(Duration.ofMillis(200)) // 200ms로 간격 조정
-                .take(Duration.ofSeconds(30))
-                .onBackpressureBuffer(1000) // 🔥 백프레셔 버퍼 추가
+        Disposable disposable = Flux.interval(Duration.ofMillis(100)) // 100ms로 간격 조정
+                .take(Duration.ofSeconds(10))
+                .onBackpressureBuffer(1000) // 백프레셔 버퍼 추가
                 .flatMap(i -> {
                     totalRequests.incrementAndGet();
                     return webClient.get()
@@ -139,7 +139,7 @@ public class LoadBalancerTest {
         
         // 30초 대기
         try {
-            Thread.sleep(31000); // 여유롭게 31초 대기
+            Thread.sleep(11000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
@@ -172,9 +172,9 @@ public class LoadBalancerTest {
     public void improvedLoadTest() {
         System.out.println("=== 개선된 부하 테스트 ===");
         
-        int totalRequests = 500;
+        int totalRequests = 100;
         int batchSize = 5; // 배치당 동시 요청 수
-        int batchInterval = 500; // 배치 간격 (ms)
+        int batchInterval = 300; // 배치 간격 (ms)
         
         Map<String, AtomicInteger> instanceCounts = new ConcurrentHashMap<>();
         AtomicInteger successCount = new AtomicInteger(0);

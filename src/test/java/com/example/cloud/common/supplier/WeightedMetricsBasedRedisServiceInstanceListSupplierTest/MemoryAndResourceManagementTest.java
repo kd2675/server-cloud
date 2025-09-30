@@ -1,7 +1,7 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
+import com.example.cloud.common.supplier.EurekaWeightedBasedRedisInstanceSupplier;
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,10 +54,10 @@ class MemoryAndResourceManagementTest extends WeightedMetricsTestBase {
         long initialUsedMemory = initialMemory.getUsed();
 
         // 여러 개의 supplier 인스턴스 생성 (백그라운드 모니터링 포함)
-        List<WeightedMetricsBasedRedisServiceInstanceListSupplier> suppliers = new ArrayList<>();
+        List<ExtendedServiceInstanceListSupplier> suppliers = new ArrayList<>();
         
         for (int i = 0; i < 5; i++) {
-            suppliers.add(new WeightedMetricsBasedRedisServiceInstanceListSupplier(context, reactiveRedisTemplate));
+            suppliers.add(new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, reactiveRedisTemplate));
         }
 
         // 잠시 동안 백그라운드 모니터링이 동작하도록 대기

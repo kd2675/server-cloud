@@ -1,7 +1,7 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
+import com.example.cloud.common.supplier.EurekaWeightedBasedRedisInstanceSupplier;
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,8 +26,8 @@ class BasicFunctionalityTest extends WeightedMetricsTestBase {
     @DisplayName("Redis 없이 동작하는 경우")
     void testOperationWithoutRedis() {
         // Given - Redis 없이 생성
-        WeightedMetricsBasedRedisServiceInstanceListSupplier supplierWithoutRedis =
-                new WeightedMetricsBasedRedisServiceInstanceListSupplier(context, null);
+        ExtendedServiceInstanceListSupplier supplierWithoutRedis =
+                new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, null);
 
         // When
         Map<String, Map<String, Object>> metrics = supplierWithoutRedis.getAllMetrics();

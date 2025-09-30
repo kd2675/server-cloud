@@ -1,7 +1,7 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
+import com.example.cloud.common.supplier.EurekaWeightedBasedRedisInstanceSupplier;
+import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.client.ServiceInstance;
@@ -58,8 +58,8 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     @DisplayName("Redis가 null일 때 Fallback 동작")
     void testGetWithNullRedis() {
         // Given - Redis가 완전히 null인 Supplier
-        WeightedMetricsBasedRedisServiceInstanceListSupplier supplierWithNullRedis = 
-                new WeightedMetricsBasedRedisServiceInstanceListSupplier(context, null);
+        ExtendedServiceInstanceListSupplier supplierWithNullRedis =
+                new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, null);
 
         // When
         Flux<List<ServiceInstance>> result = supplierWithNullRedis.get();
@@ -129,7 +129,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
                     
                     // 성공한 인스턴스가 포함되어야 함
                     boolean hasHealthyInstance = instances.stream()
-                            .anyMatch(inst -> "service-batch-1".equals(inst.getInstanceId()));
+                            .anyMatch(inst -> "service-batch-3".equals(inst.getInstanceId()));
                     assertThat(hasHealthyInstance).isTrue();
                     
                     return true;
@@ -141,8 +141,8 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     @DisplayName("Fallback 메서드 직접 테스트")
     void testGetFallbackInstancesDirectly() {
         // Given - Redis 없이 supplier 생성하여 fallback 로직 확인
-        WeightedMetricsBasedRedisServiceInstanceListSupplier supplierWithoutRedis = 
-                new WeightedMetricsBasedRedisServiceInstanceListSupplier(context, null);
+        ExtendedServiceInstanceListSupplier supplierWithoutRedis =
+                new EurekaWeightedBasedRedisInstanceSupplier(context, discoveryClient, null);
         
         // When
         Flux<List<ServiceInstance>> result = supplierWithoutRedis.get();

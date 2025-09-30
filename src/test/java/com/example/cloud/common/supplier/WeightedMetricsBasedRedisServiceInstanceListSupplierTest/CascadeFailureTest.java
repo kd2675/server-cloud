@@ -1,8 +1,7 @@
 package com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest;
 
+import com.example.cloud.common.supplier.EurekaWeightedBasedRedisInstanceSupplier;
 import com.example.cloud.common.supplier.ExtendedServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplier;
-import com.example.cloud.common.supplier.WeightedMetricsBasedRedisServiceInstanceListSupplierTest.WeightedMetricsTestBase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.client.ServiceInstance;
@@ -39,14 +38,14 @@ class CascadeFailureTest extends WeightedMetricsTestBase {
         when(failContext.getEnvironment()).thenReturn(failEnvironment);
         when(failEnvironment.getProperty("path.service.batch.host")).thenReturn("invalid-host");
         // 🔥 Integer.class로 호출되는 것만 Mock 설정 (실제 사용되는 것만)
-        when(failEnvironment.getProperty(eq("path.service.batch.port1"), eq(Integer.class))).thenReturn(8081);
-        when(failEnvironment.getProperty(eq("path.service.batch.port2"), eq(Integer.class))).thenReturn(8082);
+//        when(failEnvironment.getProperty(eq("path.service.batch.port1"), eq(Integer.class))).thenReturn(8081);
+//        when(failEnvironment.getProperty(eq("path.service.batch.port2"), eq(Integer.class))).thenReturn(8082);
         when(failEnvironment.getProperty(eq("path.service.batch.port3"), eq(Integer.class))).thenReturn(8083);
 
         // When - 연쇄 실패 상황에서 supplier 동작 확인
         try {
             ExtendedServiceInstanceListSupplier failSupplier =
-                new WeightedMetricsBasedRedisServiceInstanceListSupplier(failContext, reactiveRedisTemplate);
+                new EurekaWeightedBasedRedisInstanceSupplier(failContext, discoveryClient, reactiveRedisTemplate);
             
             Flux<List<ServiceInstance>> result = failSupplier.get();
             

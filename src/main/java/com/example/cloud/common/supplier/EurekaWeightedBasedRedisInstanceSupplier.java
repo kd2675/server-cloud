@@ -5,6 +5,7 @@ import com.example.cloud.common.instance.WeightedInstance;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -17,10 +18,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
-public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements ExtendedServiceInstanceListSupplier {
+@Service
+public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
     private final WebClient webClient;
-    private final List<LoadBalancedServiceBatchInstance> staticInstances;
+
+    // 유레카 인스턴스
+    private final DiscoveryClient discoveryClient;
+
+    // 백업(정적) 인스턴스
+    private final List<LoadBalancedServiceBatchInstance> backupInstances;
 
     // Redis 캐시 사용
     private final ReactiveRedisTemplate<String, Object> reactiveRedisTemplate;
@@ -30,15 +37,17 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     private static final String METRICS_KEY_PREFIX = "loadbalancer:metrics:";
     private static final String HEALTH_KEY_PREFIX = "loadbalancer:health:";
 
-    // 🔥 가중치 설정
+    // 가중치
     private static final double MIN_WEIGHT = 1.0;
     private static final double MAX_WEIGHT = 10.0;
     private static final String LOAD_BALANCING_STRATEGY = "WEIGHTED"; // WEIGHTED, BEST_ONLY, THRESHOLD
 
-    public WeightedMetricsBasedRedisServiceInstanceListSupplier(
+    public EurekaWeightedBasedRedisInstanceSupplier(
             ConfigurableApplicationContext context,
+            DiscoveryClient discoveryClient,
             @Autowired(required = false) ReactiveRedisTemplate<String, Object> reactiveRedisTemplate) {
 
+        this.discoveryClient = discoveryClient;
         this.reactiveRedisTemplate = reactiveRedisTemplate;
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
@@ -49,11 +58,11 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
         int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
 
         // 백업 정적 인스턴스 정의
-        this.staticInstances = Arrays.asList(
+        this.backupInstances = Arrays.asList(
                 new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
         );
 
-        log.info("🎯 WeightedMetricsBasedLoadBalancer 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
+        log.info("WeightedMetricsBasedLoadBalancer 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
                 reactiveRedisTemplate != null,
                 LOAD_BALANCING_STRATEGY,
                 serverHost, serverPort3);
@@ -68,7 +77,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🚀 가중 기반 로드밸런싱 메인 메서드
+     * 가중 기반 로드밸런싱 메인 메서드
      */
     @Override
     public Flux<List<ServiceInstance>> get() {
@@ -82,7 +91,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔥 가중 기반 인스턴스 리스트 생성 (비동기) - 타입 수정
+     * 가중 기반 인스턴스 리스트 생성 (비동기) - 타입 수정
      */
     private Mono<List<ServiceInstance>> createWeightedInstanceListAsync(List<LoadBalancedServiceBatchInstance> healthyInstances) {
         if (healthyInstances.isEmpty()) {
@@ -93,7 +102,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
         return Flux.fromIterable(healthyInstances)
                 .flatMap(instance ->
                         getInstanceLoadScoreAsync(instance)
-                                // 🔥 LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
+                                // LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
                                 .map(score -> Map.entry((ServiceInstance) instance, score))
                 )
                 .collectList()
@@ -101,12 +110,12 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                 .doOnError(error -> log.error("가중 기반 인스턴스 선택 실패", error))
                 .onErrorResume(error -> {
                     log.warn("에러 발생으로 인한 Fallback 사용: {}", error.getMessage());
-                    return Mono.just(getFallbackInstances());  // 🔥 이제 에러 시에만 실행!
+                    return Mono.just(getFallbackInstances());  // 이제 에러 시에만 실행!
                 });
     }
 
     /**
-     * 🎯 부하점수 기반 가중 리스트 생성 - 제네릭 타입 명시
+     * 부하점수 기반 가중 리스트 생성 - 제네릭 타입 명시
      */
     private List<ServiceInstance> createWeightedInstanceList(List<Map.Entry<ServiceInstance, Double>> entries) {
         if (entries.isEmpty()) {
@@ -114,7 +123,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
             return getFallbackInstances();
         }
 
-        // 🔥 타입 안전한 가중치 계산
+        // 타입 안전한 가중치 계산
         List<WeightedInstance> weightedInstances = entries.stream()
                 .map(entry -> {
                     ServiceInstance instance = entry.getKey();
@@ -138,10 +147,10 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔧 부하점수를 가중치로 변환 - NaN 안전 처리
+     * 부하점수를 가중치로 변환 - NaN 안전 처리
      */
     private double calculateWeight(double loadScore) {
-        // 🔥 NaN, 무한대, 음수 값 사전 처리
+        // NaN, 무한대, 음수 값 사전 처리
         if (Double.isNaN(loadScore) || Double.isInfinite(loadScore) || loadScore < 0) {
             return MIN_WEIGHT; // 기본 최소 가중치 반환
         }
@@ -154,7 +163,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔧 가중치 기반 인스턴스 리스트 생성
+     * 가중치 기반 인스턴스 리스트 생성
      */
     private List<ServiceInstance> createWeightedList(List<WeightedInstance> weightedInstances) {
         List<ServiceInstance> result = new ArrayList<>();
@@ -175,7 +184,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔧 가중 선택 결과 로깅 - 포맷팅 수정
+     * 가중 선택 결과 로깅 - 포맷팅 수정
      */
     private void logWeightedSelection(List<WeightedInstance> weightedInstances, int totalCopies) {
         String weightInfo = weightedInstances.stream()
@@ -191,7 +200,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                 })
                 .collect(Collectors.joining(" | "));
 
-        log.info("🎯 가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
+        log.info("가중 기반 로드밸런싱: {} | 총 인스턴스: {}", weightInfo, totalCopies);
 
         // 효율성 평가
         double avgLoadScore = weightedInstances.stream()
@@ -203,12 +212,12 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                 avgLoadScore < 50 ? "GOOD" :
                         avgLoadScore < 70 ? "FAIR" : "POOR";
 
-        // 🔥 Java 스타일 포맷팅으로 수정
-        log.info("🔍 로드밸런싱 효율성: {} (평균점수: {})", efficiency, String.format("%.1f", avgLoadScore));
+        // Java 스타일 포맷팅으로 수정
+        log.info("로드밸런싱 효율성: {} (평균점수: {})", efficiency, String.format("%.1f", avgLoadScore));
     }
 
     /**
-     * 🔥 비동기로 부하점수 조회 - 매개변수 타입 수정
+     * 비동기로 부하점수 조회 - 매개변수 타입 수정
      */
     private Mono<Double> getInstanceLoadScoreAsync(LoadBalancedServiceBatchInstance instance) {
         if (reactiveRedisTemplate == null) {
@@ -239,13 +248,13 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
      * 🔧 Fallback 인스턴스 (타입 안전)
      */
     private List<ServiceInstance> getFallbackInstances() {
-        if (!staticInstances.isEmpty()) {
-            // 🔥 LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
-            List<ServiceInstance> fallbackList = staticInstances.stream()
+        if (!backupInstances.isEmpty()) {
+            // LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
+            List<ServiceInstance> fallbackList = backupInstances.stream()
                     .map(instance -> (ServiceInstance) instance)
                     .collect(Collectors.toList());
 
-            log.info("🔄 Fallback 인스턴스 사용: {} 개", fallbackList.size());
+            log.info("Fallback 인스턴스 사용: {} 개", fallbackList.size());
             return fallbackList;
         }
         return new ArrayList<>();
@@ -262,14 +271,16 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     private void performHealthAndMetricsCheck() {
-        staticInstances.parallelStream().forEach(instance -> {
+        discoveryClient.getInstances(this.serviceId).parallelStream().forEach(instance -> {
             try {
+                LoadBalancedServiceBatchInstance loadBalancedServiceBatchInstance = new LoadBalancedServiceBatchInstance(instance);
+
                 // 1. Actuator 헬스체크
-                checkActuatorHealth(instance);
+                checkActuatorHealth(loadBalancedServiceBatchInstance);
 
                 // 2. 메트릭 수집 (건강한 경우에만)
-                if (instance.isHealthy.get()) {
-                    collectLoadMetrics(instance);
+                if (loadBalancedServiceBatchInstance.isHealthy.get()) {
+                    collectLoadMetrics(loadBalancedServiceBatchInstance);
                 }
             } catch (Exception e) {
                 log.error("인스턴스 {} 모니터링 실패: {}", instance.getInstanceId(), e.getMessage());
@@ -410,16 +421,20 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     private Mono<List<LoadBalancedServiceBatchInstance>> getHealthyInstancesFromRedis() {
         if (reactiveRedisTemplate == null) {
             // Redis가 없으면 로컬 상태 기반으로 필터링
-            List<LoadBalancedServiceBatchInstance> healthyInstances = staticInstances.stream()
+            List<ServiceInstance> instances = discoveryClient.getInstances(this.serviceId);
+
+            List<LoadBalancedServiceBatchInstance> healthyInstances = instances.stream()
+                    .map(LoadBalancedServiceBatchInstance::new)
                     .filter(instance -> instance.isHealthy.get())
                     .collect(Collectors.toList());
 
-            log.error("Redis 미사용 - 로컬 건강한 인스턴스: {}/{}", healthyInstances.size(), staticInstances.size());
+            log.error("Redis 미사용 - 로컬 건강한 인스턴스: {}/{}", healthyInstances.size(), instances.size());
             return Mono.just(healthyInstances);
         }
 
         // Redis 상태 확인
-        List<Mono<LoadBalancedServiceBatchInstance>> healthChecks = staticInstances.stream()
+        List<Mono<LoadBalancedServiceBatchInstance>> healthChecks = discoveryClient.getInstances(this.serviceId).stream()
+                .map(LoadBalancedServiceBatchInstance::new)
                 .map(this::checkInstanceHealthInRedis)
                 .collect(Collectors.toList());
 
@@ -428,14 +443,14 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                 .filter(Objects::nonNull)
                 .collectList()
                 .doOnNext(healthyList ->
-                        log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), staticInstances.size()));
+                        log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), discoveryClient.getInstances(this.serviceId).size()));
     }
 
     /**
-     * 🔥 Redis에서 개별 인스턴스 헬스 상태 확인 - 완전 NPE 방지 버전
+     * Redis에서 개별 인스턴스 헬스 상태 확인 - 완전 NPE 방지 버전
      */
     private Mono<LoadBalancedServiceBatchInstance> checkInstanceHealthInRedis(LoadBalancedServiceBatchInstance instance) {
-        // 🔥 reactiveRedisTemplate이 null이면 즉시 로컬 상태 반환
+        // reactiveRedisTemplate이 null이면 즉시 로컬 상태 반환
         if (reactiveRedisTemplate == null) {
             return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
         }
@@ -443,17 +458,17 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
         String healthKey = HEALTH_KEY_PREFIX + instance.getInstanceId();
 
         try {
-            // 🔥 NPE 방지: opsForValue()도 null일 수 있음
+            // NPE 방지: opsForValue()도 null일 수 있음
             if (reactiveRedisTemplate.opsForValue() == null) {
                 log.warn("ReactiveValueOperations가 null - 로컬 상태 사용: {}", instance.getInstanceId());
                 return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
             }
 
-            // 🔥 null 안전 처리를 위해 defer 사용
+            // null 안전 처리를 위해 defer 사용
             return Mono.defer(() -> {
                         try {
                             Mono<Object> redisMono = reactiveRedisTemplate.opsForValue().get(healthKey);
-                            // 🔥 Redis 결과가 null인 경우 처리
+                            // Redis 결과가 null인 경우 처리
                             if (redisMono == null) {
                                 return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
                             }
@@ -489,14 +504,14 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔥 Redis에서 모든 인스턴스의 메트릭 정보 조회
+     * Redis에서 모든 인스턴스의 메트릭 정보 조회
      */
     public Mono<Map<String, Map<String, Object>>> getAllMetricsFromRedis() {
         if (reactiveRedisTemplate == null) {
             return Mono.just(new HashMap<>());
         }
 
-        List<String> keys = staticInstances.stream()
+        List<String> keys = discoveryClient.getInstances(this.serviceId).stream()
                 .map(instance -> METRICS_KEY_PREFIX + instance.getInstanceId())
                 .collect(Collectors.toList());
 
@@ -517,14 +532,15 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔥 로드밸런서 상태 요약 (가중치 정보 포함)
+     * 로드밸런서 상태 요약 (가중치 정보 포함)
      */
     public Mono<Map<String, Object>> getDetailedStatusFromRedis() {
         return getAllMetricsFromRedis()
                 .map(allMetrics -> {
                     Map<String, Object> status = new HashMap<>();
 
-                    List<Map<String, Object>> instances = staticInstances.stream()
+                    List<Map<String, Object>> instances = discoveryClient.getInstances(this.serviceId).stream()
+                            .map(LoadBalancedServiceBatchInstance::new)
                             .map(instance -> {
                                 Map<String, Object> instanceInfo = new HashMap<>();
                                 instanceInfo.put("instanceId", instance.getInstanceId());
@@ -561,13 +577,14 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                             .collect(Collectors.toList());
 
                     // 전체 상태 요약
-                    long healthyCount = staticInstances.stream()
+                    long healthyCount = discoveryClient.getInstances(this.serviceId).stream()
+                            .map(LoadBalancedServiceBatchInstance::new)
                             .mapToLong(instance -> instance.isHealthy.get() ? 1 : 0)
                             .sum();
 
                     status.put("serviceId", serviceId);
                     status.put("strategy", LOAD_BALANCING_STRATEGY);
-                    status.put("totalInstances", staticInstances.size());
+                    status.put("totalInstances", discoveryClient.getInstances(this.serviceId).size());
                     status.put("healthyInstances", healthyCount);
                     status.put("metricsAvailableInstances", allMetrics.size());
                     status.put("instances", instances);
@@ -581,7 +598,7 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
     }
 
     /**
-     * 🔥 동기 버전 메트릭 조회 - 타입 안전
+     * 동기 버전 메트릭 조회 - 타입 안전
      */
     public Map<String, Map<String, Object>> getAllMetrics() {
         Map<String, Map<String, Object>> result = getAllMetricsFromRedis()

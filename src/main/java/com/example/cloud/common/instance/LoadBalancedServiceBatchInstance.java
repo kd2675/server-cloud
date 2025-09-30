@@ -18,6 +18,12 @@ public class LoadBalancedServiceBatchInstance implements ServiceInstance {
         this.port = port;
     }
 
+    public LoadBalancedServiceBatchInstance(ServiceInstance instance) {
+        this.instanceId = instance.getInstanceId();
+        this.host = instance.getHost();
+        this.port = instance.getPort();
+    }
+
     @Override
     public String getServiceId() {
         return "service-batch";

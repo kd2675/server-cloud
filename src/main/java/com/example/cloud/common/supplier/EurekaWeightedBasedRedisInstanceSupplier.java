@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 @Service
 public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedServiceInstanceListSupplier {
     private final String serviceId = "service-batch";
+    private final String serviceBackupId = "service-batch-backup";
+
     private final WebClient webClient;
 
     // 유레카 인스턴스
@@ -53,19 +55,22 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
 
-        // application-local.yml에서 포트 정보 읽기
-        String serverHost = context.getEnvironment().getProperty("path.service.batch.host");
-        int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
+//        // application-local.yml에서 포트 정보 읽기
+//        String serverHost = context.getEnvironment().getProperty("path.service.batch.host");
+//        int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
+//
+//        // 백업 정적 인스턴스 정의
+//        this.backupInstances = Arrays.asList(
+//                new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
+//        );
 
-        // 백업 정적 인스턴스 정의
-        this.backupInstances = Arrays.asList(
-                new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
-        );
+        this.backupInstances = discoveryClient.getInstances(this.serviceBackupId).stream()
+                .map(LoadBalancedServiceBatchInstance::new)
+                .toList();
 
-        log.info("EurekaWeightedBasedRedisInstanceSupplier 초기화 완료 (Redis: {}, 전략: {}) - {}:{}",
+        log.info("EurekaWeightedBasedRedisInstanceSupplier 초기화 완료 (Redis: {}, 전략: {})",
                 reactiveRedisTemplate != null,
-                LOAD_BALANCING_STRATEGY,
-                serverHost, serverPort3);
+                LOAD_BALANCING_STRATEGY);
 
         // 백그라운드 모니터링 시작
         startMetricsAndHealthMonitoring();

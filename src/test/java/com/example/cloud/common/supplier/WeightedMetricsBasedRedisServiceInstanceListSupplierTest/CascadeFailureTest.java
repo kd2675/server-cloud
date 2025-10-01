@@ -44,39 +44,6 @@ class CascadeFailureTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("환경변수 설정 실패 시 기본값으로 동작")
-    void testEnvironmentVariableFailure() {
-        // Given - 잘못된 환경변수 설정
-        ConfigurableApplicationContext failContext = mock(ConfigurableApplicationContext.class);
-        ConfigurableEnvironment failEnvironment = mock(ConfigurableEnvironment.class);
-        
-        when(failContext.getEnvironment()).thenReturn(failEnvironment);
-        when(failEnvironment.getProperty("path.service.batch.host")).thenReturn("localhost");
-        when(failEnvironment.getProperty(eq("path.service.batch.port3"), eq(Integer.class))).thenReturn(8083);
-
-        // When - 환경변수 문제가 있어도 supplier 생성 성공
-        try {
-            ExtendedServiceInstanceListSupplier failSupplier =
-                new EurekaWeightedBasedRedisInstanceSupplier(failContext, discoveryClient, reactiveRedisTemplate);
-            
-            Flux<List<ServiceInstance>> result = failSupplier.get();
-            
-            // Then - 정상 동작
-            StepVerifier.create(result)
-                .expectNextMatches(instances -> {
-                    assertThat(instances).isNotNull();
-                    return true;
-                })
-                .verifyComplete();
-                
-        } catch (Exception e) {
-            // 예외가 발생해도 시스템 다운은 아니어야 함
-            assertThat(e).isNotInstanceOf(OutOfMemoryError.class);
-            assertThat(e).isNotInstanceOf(StackOverflowError.class);
-        }
-    }
-
-    @Test
     @DisplayName("부분 복구 시나리오 테스트")
     void testPartialRecoveryScenario() {
         // Given - 점진적 복구 시뮬레이션

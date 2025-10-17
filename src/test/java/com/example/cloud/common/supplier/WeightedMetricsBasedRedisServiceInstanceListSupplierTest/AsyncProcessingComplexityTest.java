@@ -63,13 +63,10 @@ class AsyncProcessingComplexityTest extends WeightedMetricsTestBase {
         // Given - 정확한 Redis 키로 Mock 설정
         
         // 인스턴스 1: 정상 응답
-        Map<String, Object> healthyData1 = createHealthData(true);
-        Map<String, Object> validMetrics1 = createMetricsData(25.0, 30.0, 40.0);
-        
         when(reactiveValueOperations.get("loadbalancer:health:service-batch-1"))
-            .thenReturn(Mono.just(healthyData1));
+            .thenReturn(Mono.just(createHealthData(true)));
         when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-1"))
-            .thenReturn(Mono.just(validMetrics1));
+            .thenReturn(Mono.just(createMetricsData(25.0, 30.0, 40.0)));
         
         // 인스턴스 2: 타임아웃 발생 (3초 초과)
         when(reactiveValueOperations.get("loadbalancer:health:service-batch-2"))
@@ -78,16 +75,14 @@ class AsyncProcessingComplexityTest extends WeightedMetricsTestBase {
             .thenReturn(Mono.delay(Duration.ofSeconds(5)).then(Mono.just(createMetricsData(30.0, 35.0, 45.0))));
         
         // 인스턴스 3: 잘못된 데이터 형식
-        Map<String, Object> healthyData3 = createHealthData(true);
-        Map<String, Object> invalidMetrics3 = Map.of(
-            "loadScore", "invalid_string", // 잘못된 타입
-            "cpuUsage", 45.0,
-            "memoryUsage", 50.0
-        );
         when(reactiveValueOperations.get("loadbalancer:health:service-batch-3"))
-            .thenReturn(Mono.just(healthyData3));
+            .thenReturn(Mono.just(createHealthData(true)));
         when(reactiveValueOperations.get("loadbalancer:metrics:service-batch-3"))
-            .thenReturn(Mono.just(invalidMetrics3));
+            .thenReturn(Mono.just(Map.of(
+                    "loadScore", "invalid_string", // 잘못된 타입
+                    "cpuUsage", 45.0,
+                    "memoryUsage", 50.0
+            )));
 
         // When
         Flux<List<ServiceInstance>> result = supplier.get();

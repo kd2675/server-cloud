@@ -25,7 +25,7 @@ public class FallbackController {
         return Mono.error(new GeneralException(Code.SERVER_DOWN));
     }
 
-    @RequestMapping("/service-batch")
+    @RequestMapping("/service-batch/**")
     public ResponseEntity<Map<String, Object>> serviceBatchFallback() {
         log.warn("service-batch Circuit Breaker 작동 - Fallback 응답 반환");
 

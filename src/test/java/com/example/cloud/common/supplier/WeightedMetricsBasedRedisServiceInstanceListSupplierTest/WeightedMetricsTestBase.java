@@ -25,8 +25,8 @@ public abstract class WeightedMetricsTestBase {
     @Mock
     protected ConfigurableApplicationContext context;
 
-    @Mock
-    protected ConfigurableEnvironment environment;
+//    @Mock
+//    protected ConfigurableEnvironment environment;
 
     @Mock
     protected ReactiveRedisTemplate<String, Object> reactiveRedisTemplate;
@@ -51,19 +51,24 @@ public abstract class WeightedMetricsTestBase {
 //        lenient().when(environment.getProperty("path.service.batch.host")).thenReturn("localhost");
 //        lenient().when(environment.getProperty("path.service.batch.port1", Integer.class)).thenReturn(8081);
 //        lenient().when(environment.getProperty("path.service.batch.port2", Integer.class)).thenReturn(8082);
-        lenient().when(environment.getProperty("path.service.batch.port3", Integer.class)).thenReturn(8083);
+//        lenient().when(environment.getProperty("path.service.batch.port3", Integer.class)).thenReturn(8083);
 //        lenient().when(reactiveRedisTemplate.opsForValue()).thenReturn(reactiveValueOperations);
-        lenient().when(context.getEnvironment()).thenReturn(environment);
+//        lenient().when(context.getEnvironment()).thenReturn(environment);
         // Redis ValueOps 목킹
         lenient().when(reactiveRedisTemplate.opsForValue()).thenReturn(reactiveValueOperations);
 
-        // Eureka에서 반환될 인스턴스 3개 구성
+        // Eureka에서 반환될 인스턴스 2개 구성
         List<ServiceInstance> discovered = List.of(
                 createInstance("service-batch-1", "localhost", 8081),
                 createInstance("service-batch-2", "localhost", 8082),
                 createInstance("service-batch-3", "localhost", 8083)
         );
         lenient().when(discoveryClient.getInstances("service-batch")).thenReturn(discovered);
+
+        List<ServiceInstance> backupDiscovered = List.of(
+                createInstance("service-batch-1", "localhost", 8084)
+        );
+        lenient().when(discoveryClient.getInstances("service-batch-backup")).thenReturn(backupDiscovered);
 
     }
 

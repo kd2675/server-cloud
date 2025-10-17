@@ -57,6 +57,8 @@ public class CloudConfig {
     private static final String LB_SERVICE_COCOIN = "lb://service-cocoin";
     private static final String LB_SERVER_BATCH = "lb://server-batch";
 
+    private static final String LB_SERVICE_BATCH_BACKUP = "lb://service-batch-backup";
+
 
 
     private final HeaderFilter headerFilter;
@@ -180,12 +182,22 @@ public class CloudConfig {
                                         .setFallbackUri("forward:/fallback/service-batch")
                                 )
                                 .retry(retryConfig -> retryConfig
-                                        .setRetries(3)
+                                        .setRetries(2)
                                         .setMethods(HttpMethod.GET, HttpMethod.POST)
                                         .setSeries(HttpStatus.Series.SERVER_ERROR)
                                 )
                         )
                         .uri(LB_SERVICE_BATCH) // 로드밸런서 URI 사용
+                )
+                // 백업 라우트: fallback 진입 시 동일 경로를 백업 클러스터로 전달
+                .route("service-batch-backup-loadbalanced", r -> r.path("/fallback/service-batch/**")
+                        .filters(f -> f
+                                .setPath("/service/batch") // 원래 서비스의 루트로 정규화
+                                .setRequestHeader("X-Fallback-Routed", "true")
+                                .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                        )
+                        .uri(LB_SERVICE_BATCH_BACKUP)
                 )
 
                 .build();

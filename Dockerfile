@@ -18,7 +18,7 @@ COPY server-cloud/ /build/server-cloud/
 # 빌드 (기존과 동일)
 RUN gradle :server-cloud:clean :server-cloud:build --no-daemon --parallel
 
-FROM openjdk:17-slim
+FROM eclipse-temurin:17-jdk-jammy
 WORKDIR /app
 
 COPY --from=builder /build/server-cloud/build/libs/*.jar ./app.jar

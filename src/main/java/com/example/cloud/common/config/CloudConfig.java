@@ -78,7 +78,7 @@ public class CloudConfig {
             ServerHttpRequest request = ctx.getRequest();
             String path = request.getPath().pathWithinApplication().value();
 
-            if (CorsUtils.isPreFlightRequest(request) || isPublicPath(path)) {
+            if (CorsUtils.isPreFlightRequest(request) || isGatewayAuthExemptPath(path)) {
                 return chain.filter(ctx);
             }
 
@@ -93,10 +93,11 @@ public class CloudConfig {
         };
     }
 
-    private boolean isPublicPath(String path) {
+    private boolean isGatewayAuthExemptPath(String path) {
         return path.equals("/actuator/health")
                 || path.startsWith("/actuator/health/")
-                || path.equals("/actuator/info");
+                || path.equals("/actuator/info")
+                || path.startsWith("/service/batch/webhook/");
     }
 
     @Bean

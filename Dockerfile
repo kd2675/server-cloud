@@ -1,4 +1,4 @@
-FROM gradle:8.7-jdk17 as builder
+FROM gradle:8.7-jdk21 as builder
 WORKDIR /build
 
 # 🔥 더 세밀한 의존성 캐싱 (서브프로젝트별)
@@ -18,7 +18,7 @@ COPY server-cloud/ /build/server-cloud/
 # 빌드 (기존과 동일)
 RUN gradle :server-cloud:clean :server-cloud:build --no-daemon --parallel
 
-FROM eclipse-temurin:17-jdk-jammy
+FROM eclipse-temurin:21-jdk-jammy
 WORKDIR /app
 
 COPY --from=builder /build/server-cloud/build/libs/*.jar ./app.jar

@@ -11,6 +11,7 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 @ComponentScan(basePackages = {"org.example.core"})
 public class CloudConfig {
+    private static final String AUTH_HEADER = "Auth-header";
+    private static final String CLOUD_AUTH_HEADER_VALUE = "cloud";
+
     @Value("${path.server.member.url}")
     private String serverUrlMember;
 
@@ -68,6 +72,34 @@ public class CloudConfig {
     private final PostLoggingFilter postLoggingFilter;
 
     @Bean
+    @Order(-100)
+    public WebFilter gatewayAuthFilter() {
+        return (ServerWebExchange ctx, WebFilterChain chain) -> {
+            ServerHttpRequest request = ctx.getRequest();
+            String path = request.getPath().pathWithinApplication().value();
+
+            if (CorsUtils.isPreFlightRequest(request) || isPublicPath(path)) {
+                return chain.filter(ctx);
+            }
+
+            String authHeader = request.getHeaders().getFirst(AUTH_HEADER);
+            if (!CLOUD_AUTH_HEADER_VALUE.equals(authHeader)) {
+                ServerHttpResponse response = ctx.getResponse();
+                response.setStatusCode(HttpStatus.UNAUTHORIZED);
+                return response.setComplete();
+            }
+
+            return chain.filter(ctx);
+        };
+    }
+
+    private boolean isPublicPath(String path) {
+        return path.equals("/actuator/health")
+                || path.startsWith("/actuator/health/")
+                || path.equals("/actuator/info");
+    }
+
+    @Bean
     public WebFilter corsFilter() {
         return (ServerWebExchange ctx, WebFilterChain chain) -> {
             ServerHttpRequest request = ctx.getRequest();
@@ -84,7 +116,7 @@ public class CloudConfig {
                 HttpHeaders headers = response.getHeaders();
                 headers.add("Access-Control-Allow-Origin", origins);
                 headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                headers.add("Access-Control-Allow-Headers", "authorization ,X-Auth-Token, X-Requested-With, Content-Type, Original, Auth-header");
+                headers.add("Access-Control-Allow-Headers", "authorization ,X-Auth-Token, X-Requested-With, Content-Type, Original, " + AUTH_HEADER);
                 headers.add("Access-Control-Allow-Credentials", "true");
 
                 if (request.getMethod() == HttpMethod.OPTIONS) {
@@ -107,7 +139,7 @@ public class CloudConfig {
                 .route("health", r -> r.path("/test/circuit")
                         .filters(
                                 f -> f.setPath("/server/cloud/health/circuit")
-                                        .setRequestHeader("Auth-header", "cloud")
+                                        .setRequestHeader(AUTH_HEADER, CLOUD_AUTH_HEADER_VALUE)
                                         .circuitBreaker(
                                                 c -> c.setName("myCircuitBreaker")
                                                         .setStatusCodes(fallbackStatusCodes)
@@ -119,12 +151,12 @@ public class CloudConfig {
                         .uri(serverUrlCloud)
                 ).route(r -> r.path("/file/**")
                         .filters(
-                                f -> f.setRequestHeader("Auth-header", "second")
+                                f -> f.setRequestHeader(AUTH_HEADER, "second")
                         )
                         .uri(serverUrlFile)
                 ).route(r -> r.path("/batch/**")
                         .filters(
-                                f -> f.setRequestHeader("Auth-header", "second")
+                                f -> f.setRequestHeader(AUTH_HEADER, "second")
                         )
                         .uri(serverUrlBatch)
                 ).route(r -> r.path("/member/**")
@@ -132,7 +164,7 @@ public class CloudConfig {
                                 f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
                                         .filter(headerFilter.apply(new HeaderFilter.Config()))
                                         .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
-                                        .setRequestHeader("Auth-header", "second")
+                                        .setRequestHeader(AUTH_HEADER, "second")
 //                                                .circuitBreaker(c -> c.setName("circuitBreaker"))
                         )
                         .uri(serverUrlMember)
@@ -145,7 +177,7 @@ public class CloudConfig {
                                                 c -> c.setName("myCircuitBreaker")
                                                         .setStatusCodes(fallbackStatusCodes)
                                         )
-                                        .setRequestHeader("Auth-header", "second")
+                                        .setRequestHeader(AUTH_HEADER, "second")
                         )
                         .uri(serverUrlCocoin)
                 ).route(r -> r.path("/cocoin/**")
@@ -159,7 +191,7 @@ public class CloudConfig {
                                                 c -> c.setName("myCircuitBreaker")
                                                         .setStatusCodes(fallbackStatusCodes)
                                         )
-                                        .setRequestHeader("Auth-header", "second")
+                                        .setRequestHeader(AUTH_HEADER, "second")
                         )
                         .uri(serverUrlCocoin)
                 )
@@ -175,7 +207,7 @@ public class CloudConfig {
                         .filters(f -> f
                                 .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
                                 .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
-                                .setRequestHeader("Auth-header", "second")
+                                .setRequestHeader(AUTH_HEADER, "second")
                                 .circuitBreaker(c -> c
                                         .setName("serviceBatchCircuitBreaker")
                                         .setStatusCodes(fallbackStatusCodes)

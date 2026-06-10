@@ -225,8 +225,9 @@ public class CloudConfig {
                 // 백업 라우트: fallback 진입 시 동일 경로를 백업 클러스터로 전달
                 .route("service-batch-backup-loadbalanced", r -> r.path("/fallback/service-batch/**")
                         .filters(f -> f
-                                .setPath("/service/batch") // 원래 서비스의 루트로 정규화
+                                .rewritePath("/fallback/service-batch(?<segment>/?.*)", "/service/batch${segment}") // 원래 서비스 경로로 정규화
                                 .setRequestHeader("X-Fallback-Routed", "true")
+                                .setRequestHeader(AUTH_HEADER, "second")
                                 .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
                                 .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
                         )

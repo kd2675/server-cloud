@@ -142,7 +142,7 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("Redis multiGet 실패 시 처리")
+    @DisplayName("Redis multiGet 실패 시 빈 메트릭으로 처리")
     void testGetAllMetricsFromRedisWithError() {
         // Given - Redis multiGet 오류
         when(reactiveValueOperations.multiGet(anyList()))
@@ -153,8 +153,8 @@ class RedisDataHandlingTest extends WeightedMetricsTestBase {
 
         // Then
         StepVerifier.create(result)
-                .expectError(RuntimeException.class)
-                .verify();
+                .expectNextMatches(Map::isEmpty)
+                .verifyComplete();
     }
 
     @Test

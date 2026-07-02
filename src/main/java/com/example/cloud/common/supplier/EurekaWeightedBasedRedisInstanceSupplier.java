@@ -28,9 +28,6 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     // 유레카 인스턴스
     private final DiscoveryClient discoveryClient;
 
-    // 백업(정적) 인스턴스
-    private final List<LoadBalancedServiceBatchInstance> backupInstances;
-
     // Redis 캐시 사용
     private final ReactiveRedisTemplate<String, Object> reactiveRedisTemplate;
     private final long CACHE_TTL_SECONDS = 30; // 30초 TTL
@@ -54,19 +51,6 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
-
-//        // application-local.yml에서 포트 정보 읽기
-//        String serverHost = context.getEnvironment().getProperty("path.service.batch.host");
-//        int serverPort3 = context.getEnvironment().getProperty("path.service.batch.port3", Integer.class);
-//
-//        // 백업 정적 인스턴스 정의
-//        this.backupInstances = Arrays.asList(
-//                new LoadBalancedServiceBatchInstance("service-batch-3", serverHost, serverPort3)
-//        );
-
-        this.backupInstances = discoveryClient.getInstances(this.serviceBackupId).stream()
-                .map(LoadBalancedServiceBatchInstance::new)
-                .toList();
 
         log.info("EurekaWeightedBasedRedisInstanceSupplier 초기화 완료 (Redis: {}, 전략: {})",
                 reactiveRedisTemplate != null,
@@ -237,9 +221,12 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                 return Mono.just(100.0);
             }
 
-            // get(key)가 null일 수 있으므로 justOrEmpty 사용
-            return reactiveRedisTemplate.opsForValue()
-                    .get(key)
+            Mono<Object> metricsMono = valueOps.get(key);
+            if (metricsMono == null) {
+                return Mono.just(100.0);
+            }
+
+            return metricsMono
                     .cast(Map.class)
                     .timeout(Duration.ofSeconds(3))
                     .map(metrics -> {
@@ -251,6 +238,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                         log.error("loadScore가 숫자가 아님: {} -> {}", instance.getInstanceId(), loadScore);
                         return 100.0;
                     })
+                    .switchIfEmpty(Mono.just(100.0))
                     .doOnNext(tick -> log.info("부하점수 : {} -> {}", instance.getInstanceId(), tick))
                     .doOnError(error -> log.error("부하점수 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage()))
                     .onErrorReturn(100.0);
@@ -261,19 +249,24 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     }
 
     /**
-     * 🔧 Fallback 인스턴스 (타입 안전)
+     * Fallback 인스턴스는 매번 Eureka에서 다시 조회한다.
+     * service-batch-backup이 server-cloud 기동 이후 등록되어도 재시작 없이 반영하기 위해서다.
      */
     private List<ServiceInstance> getFallbackInstances() {
-        if (!backupInstances.isEmpty()) {
-            // LoadBalancedServiceBatchInstance를 ServiceInstance로 캐스팅
-            List<ServiceInstance> fallbackList = backupInstances.stream()
-                    .map(instance -> (ServiceInstance) instance)
-                    .collect(Collectors.toList());
+        List<ServiceInstance> fallbackList = getDiscoveredInstances(serviceBackupId).stream()
+                .map(instance -> (ServiceInstance) instance)
+                .collect(Collectors.toList());
 
-            log.info("Fallback 인스턴스 사용: {} 개", fallbackList.size());
-            return fallbackList;
+        if (fallbackList.isEmpty()) {
+            log.warn("Fallback 인스턴스가 없습니다. serviceId={}", serviceBackupId);
+            return Collections.emptyList();
         }
-        return new ArrayList<>();
+
+        String instanceIds = fallbackList.stream()
+                .map(ServiceInstance::getInstanceId)
+                .collect(Collectors.joining(","));
+        log.info("Fallback 인스턴스 사용: {} 개 ({})", fallbackList.size(), instanceIds);
+        return fallbackList;
     }
 
     private void startMetricsAndHealthMonitoring() {
@@ -287,16 +280,19 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     }
 
     private void performHealthAndMetricsCheck() {
-        discoveryClient.getInstances(this.serviceId).parallelStream().forEach(instance -> {
-            try {
-                LoadBalancedServiceBatchInstance loadBalancedServiceBatchInstance = new LoadBalancedServiceBatchInstance(instance);
+        monitorServiceInstances(this.serviceId);
+        monitorServiceInstances(this.serviceBackupId);
+    }
 
+    private void monitorServiceInstances(String targetServiceId) {
+        getDiscoveredInstances(targetServiceId).parallelStream().forEach(instance -> {
+            try {
                 // 1. Actuator 헬스체크
-                checkActuatorHealth(loadBalancedServiceBatchInstance);
+                checkActuatorHealth(instance);
 
                 // 2. 메트릭 수집 (건강한 경우에만)
-                if (loadBalancedServiceBatchInstance.isHealthy.get()) {
-                    collectLoadMetrics(loadBalancedServiceBatchInstance);
+                if (instance.isHealthy.get()) {
+                    collectLoadMetrics(instance);
                 }
             } catch (Exception e) {
                 log.error("인스턴스 {} 모니터링 실패: {}", instance.getInstanceId(), e.getMessage());
@@ -405,11 +401,13 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
         String key = METRICS_KEY_PREFIX + instanceId;
 
         Map<String, Object> safeMetrics = new HashMap<>();
-        metrics.forEach((k, v) -> {
-            if (v instanceof Number || v instanceof String || v instanceof Boolean) {
-                safeMetrics.put(k, v);
-            }
-        });
+        if (metrics != null) {
+            metrics.forEach((k, v) -> {
+                if (v instanceof Number || v instanceof String || v instanceof Boolean) {
+                    safeMetrics.put(k, v);
+                }
+            });
+        }
         safeMetrics.put("timestamp", System.currentTimeMillis());
 
         return reactiveRedisTemplate.opsForValue()
@@ -437,10 +435,8 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
     private Mono<List<LoadBalancedServiceBatchInstance>> getHealthyInstancesFromRedis() {
         if (reactiveRedisTemplate == null) {
             // Redis가 없으면 로컬 상태 기반으로 필터링
-            List<ServiceInstance> instances = discoveryClient.getInstances(this.serviceId);
-
+            List<LoadBalancedServiceBatchInstance> instances = getDiscoveredInstances(this.serviceId);
             List<LoadBalancedServiceBatchInstance> healthyInstances = instances.stream()
-                    .map(LoadBalancedServiceBatchInstance::new)
                     .filter(instance -> instance.isHealthy.get())
                     .collect(Collectors.toList());
 
@@ -449,8 +445,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
         }
 
         // Redis 상태 확인
-        List<Mono<LoadBalancedServiceBatchInstance>> healthChecks = discoveryClient.getInstances(this.serviceId).stream()
-                .map(LoadBalancedServiceBatchInstance::new)
+        List<Mono<LoadBalancedServiceBatchInstance>> healthChecks = getDiscoveredInstances(this.serviceId).stream()
                 .map(this::checkInstanceHealthInRedis)
                 .collect(Collectors.toList());
 
@@ -459,7 +454,18 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                 .filter(Objects::nonNull)
                 .collectList()
                 .doOnNext(healthyList ->
-                        log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), discoveryClient.getInstances(this.serviceId).size()));
+                        log.info("Redis 기반 건강한 인스턴스: {}/{}", healthyList.size(), getDiscoveredInstances(this.serviceId).size()));
+    }
+
+    private List<LoadBalancedServiceBatchInstance> getDiscoveredInstances(String targetServiceId) {
+        try {
+            return discoveryClient.getInstances(targetServiceId).stream()
+                    .map(LoadBalancedServiceBatchInstance::new)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Eureka 인스턴스 조회 실패 ({}): {}", targetServiceId, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     /**
@@ -495,15 +501,15 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                         }
                     })
                     .cast(Map.class)
-                    .map(healthData -> {
+                    .flatMap(healthData -> {
                         Boolean isHealthy = (Boolean) healthData.get("isHealthy");
                         if (Boolean.TRUE.equals(isHealthy)) {
                             instance.isHealthy.set(true);
-                            return instance;
+                            return Mono.just(instance);
                         }
-                        return null;
+                        instance.isHealthy.set(false);
+                        return Mono.empty();
                     })
-                    .filter(Objects::nonNull) // null 값 필터링
                     .switchIfEmpty(Mono.defer(() -> {
                         // 건강하지 않거나 데이터가 없는 경우
                         log.warn("Redis에서 헬스 데이터 없음 ({}), 로컬 상태 사용", instance.getInstanceId());
@@ -528,14 +534,30 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
             return Mono.just(new HashMap<>());
         }
 
-        List<String> keys = discoveryClient.getInstances(this.serviceId).stream()
+        List<String> keys = getDiscoveredInstances(this.serviceId).stream()
                 .map(instance -> METRICS_KEY_PREFIX + instance.getInstanceId())
                 .collect(Collectors.toList());
 
-        return reactiveRedisTemplate.opsForValue()
-                .multiGet(keys)
+        if (keys.isEmpty()) {
+            return Mono.just(new HashMap<>());
+        }
+
+        var valueOps = reactiveRedisTemplate.opsForValue();
+        if (valueOps == null) {
+            return Mono.just(new HashMap<>());
+        }
+
+        Mono<List<Object>> metricsMono = valueOps.multiGet(keys);
+        if (metricsMono == null) {
+            return Mono.just(new HashMap<>());
+        }
+
+        return metricsMono
                 .map(values -> {
                     Map<String, Map<String, Object>> allMetrics = new HashMap<>();
+                    if (values == null) {
+                        return allMetrics;
+                    }
 
                     for (int i = 0; i < keys.size() && i < values.size(); i++) {
                         if (values.get(i) != null) {
@@ -545,7 +567,9 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                     }
 
                     return allMetrics;
-                });
+                })
+                .switchIfEmpty(Mono.just(new HashMap<>()))
+                .onErrorReturn(new HashMap<>());
     }
 
     /**
@@ -557,8 +581,7 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                 .map(allMetrics -> {
                     Map<String, Object> status = new HashMap<>();
 
-                    List<Map<String, Object>> instances = discoveryClient.getInstances(this.serviceId).stream()
-                            .map(LoadBalancedServiceBatchInstance::new)
+                    List<Map<String, Object>> instances = getDiscoveredInstances(this.serviceId).stream()
                             .map(instance -> {
                                 Map<String, Object> instanceInfo = new HashMap<>();
                                 instanceInfo.put("instanceId", instance.getInstanceId());
@@ -595,15 +618,18 @@ public class EurekaWeightedBasedRedisInstanceSupplier implements ExtendedService
                             .collect(Collectors.toList());
 
                     // 전체 상태 요약
-                    long healthyCount = discoveryClient.getInstances(this.serviceId).stream()
-                            .map(LoadBalancedServiceBatchInstance::new)
+                    long healthyCount = getDiscoveredInstances(this.serviceId).stream()
                             .mapToLong(instance -> instance.isHealthy.get() ? 1 : 0)
                             .sum();
 
+                    List<LoadBalancedServiceBatchInstance> backupInstances = getDiscoveredInstances(this.serviceBackupId);
+
                     status.put("serviceId", serviceId);
+                    status.put("backupServiceId", serviceBackupId);
                     status.put("strategy", LOAD_BALANCING_STRATEGY);
-                    status.put("totalInstances", discoveryClient.getInstances(this.serviceId).size());
+                    status.put("totalInstances", getDiscoveredInstances(this.serviceId).size());
                     status.put("healthyInstances", healthyCount);
+                    status.put("backupInstances", backupInstances.size());
                     status.put("metricsAvailableInstances", allMetrics.size());
                     status.put("instances", instances);
                     status.put("timestamp", System.currentTimeMillis());

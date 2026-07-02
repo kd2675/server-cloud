@@ -1,74 +1,93 @@
 package com.example.cloud.common.config.filter;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.logging.log4j.util.Strings;
-import org.example.core.response.base.exception.GeneralException;
+import org.example.core.auth.UserContextHeaders;
 import org.example.core.response.base.vo.Code;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AuthorizationTokenFilter extends AbstractGatewayFilterFactory<AuthorizationTokenFilter.Config> {
     @Value("${jwt.secret}")
     private String secret;
-
-    private final WebClient webClient;
 
     @Override
     public GatewayFilter apply(AuthorizationTokenFilter.Config config) {
         return (exchange, chain) -> {
             ServerHttpRequest request = exchange.getRequest();
 
-            // 헤더에 Authorization이 없을 경우 (토큰을 발급받지 않은 경우)
-            if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION))
+            String authorizationHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+            if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
                 return OnError.onError(exchange, "No Authorization Header", Code.UNAUTHORIZED);
+            }
 
-            String authorizationHeader = request.getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
-            String token = authorizationHeader.replace("Bearer ", "");
-            // 토큰 검증 실패 시
-            if (isTokenValid(token))
+            Claims claims = parseClaims(authorizationHeader.substring("Bearer ".length()));
+            if (claims == null || claims.get("id") == null || claims.get("userEmail") == null) {
                 return OnError.onError(exchange, "Token is not valid", Code.UNAUTHORIZED);
+            }
 
-            return chain.filter(exchange);
+            ServerHttpRequest userContextRequest = request.mutate()
+                    .headers(headers -> {
+                        removeUserContextHeaders(headers);
+                        headers.set(UserContextHeaders.USER_ID, String.valueOf(claims.get("id")));
+                        headers.set(UserContextHeaders.EMAIL, claims.get("userEmail", String.class));
+                        headers.set(UserContextHeaders.ROLES, rolesHeaderValue(claims.get("roles")));
+                    })
+                    .build();
 
+            return chain.filter(exchange.mutate().request(userContextRequest).build());
         };
     }
-    // 토큰 검증을 위한 메서드
-    private boolean isTokenValid(String token) {
-        String subject = null;
 
+    private Claims parseClaims(String token) {
         try {
-            subject = Jwts.parser()
-                    .setSigningKey(secret.getBytes())
+            SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
                     .parseClaimsJws(token)
-                    .getBody()
-                    .getSubject();
-
+                    .getBody();
         } catch (Exception e) {
             log.warn("exception is occurred : {}", e.getMessage());
+            return null;
         }
+    }
 
-        return !Strings.isBlank(subject);
+    private void removeUserContextHeaders(HttpHeaders headers) {
+        new ArrayList<>(headers.keySet()).stream()
+                .filter(header -> header.regionMatches(true, 0, "X-User-", 0, "X-User-".length()))
+                .forEach(headers::remove);
+    }
+
+    private String rolesHeaderValue(Object roles) {
+        if (roles instanceof Collection<?> collection) {
+            return collection.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(","));
+        }
+        return roles == null ? "" : String.valueOf(roles);
     }
 
     @Getter
     @Setter
     public static class Config {
     }
-
 }

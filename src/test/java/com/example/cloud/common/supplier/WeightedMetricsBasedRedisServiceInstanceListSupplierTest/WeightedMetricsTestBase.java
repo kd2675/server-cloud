@@ -66,15 +66,19 @@ public abstract class WeightedMetricsTestBase {
         lenient().when(discoveryClient.getInstances("service-batch")).thenReturn(discovered);
 
         List<ServiceInstance> backupDiscovered = List.of(
-                createInstance("service-batch-1", "localhost", 8084)
+                createInstance("service-batch-backup", "service-batch-backup-1", "localhost", 8084)
         );
         lenient().when(discoveryClient.getInstances("service-batch-backup")).thenReturn(backupDiscovered);
 
     }
 
-    private ServiceInstance createInstance(String instanceId, String host, int port) {
+    protected ServiceInstance createInstance(String instanceId, String host, int port) {
+        return createInstance("service-batch", instanceId, host, port);
+    }
+
+    protected ServiceInstance createInstance(String serviceId, String instanceId, String host, int port) {
         return new ServiceInstance() {
-            @Override public String getServiceId() { return "service-batch"; }
+            @Override public String getServiceId() { return serviceId; }
             @Override public String getInstanceId() { return instanceId; }
             @Override public String getHost() { return host; }
             @Override public int getPort() { return port; }

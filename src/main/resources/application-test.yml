@@ -18,20 +18,20 @@ path:
       url: http://localhost:20200
     batch:
       host: localhost
-      port: 20260
-      url: http://localhost:20260
+      port: 20290
+      url: http://localhost:20290
     file:
-      host: localhost
-      port: 20270
-      url: http://localhost:20270
-    socket:
       host: localhost
       port: 20280
       url: http://localhost:20280
+    socket:
+      host: localhost
+      port: 20270
+      url: http://localhost:20270
     member:
       host: localhost
-      port: 20290
-      url: http://localhost:20290
+      port: 20260
+      url: http://localhost:20260
   service:
     batch:
       host: localhost

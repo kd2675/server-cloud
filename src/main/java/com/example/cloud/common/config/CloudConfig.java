@@ -68,7 +68,6 @@ public class CloudConfig {
     private final HeaderFilter headerFilter;
     private final PreLoggingFilter preLoggingFilter;
     private final AuthorizationTokenFilter authorizationTokenFilter;
-    private final AuthorizationHeaderFilter authorizationHeaderFilter;
     private final PostLoggingFilter postLoggingFilter;
 
     @Bean
@@ -97,6 +96,9 @@ public class CloudConfig {
         return path.equals("/actuator/health")
                 || path.startsWith("/actuator/health/")
                 || path.equals("/actuator/info")
+                || path.equals("/cocoin")
+                || path.startsWith("/cocoin/")
+                || path.equals("/service/batch/webhook")
                 || path.startsWith("/service/batch/webhook/");
     }
 
@@ -135,6 +137,10 @@ public class CloudConfig {
         for (int i = 400; i < 600; i++) {
             fallbackStatusCodes.add(String.valueOf(i));
         }
+        Set<String> serviceBatchFallbackStatusCodes = new HashSet<>();
+        for (int i = 500; i < 600; i++) {
+            serviceBatchFallbackStatusCodes.add(String.valueOf(i));
+        }
 
         return builder.routes()
                 .route("health", r -> r.path("/test/circuit")
@@ -152,7 +158,8 @@ public class CloudConfig {
                         .uri(serverUrlCloud)
                 ).route(r -> r.path("/file/**")
                         .filters(
-                                f -> f.setRequestHeader(AUTH_HEADER, "second")
+                                f -> f.rewritePath("/file(?<segment>/?.*)", "${segment}")
+                                        .setRequestHeader(AUTH_HEADER, "second")
                         )
                         .uri(serverUrlFile)
                 ).route(r -> r.path("/batch/**")
@@ -172,7 +179,7 @@ public class CloudConfig {
                 ).route(r -> r.path("/cocoin/ctf/**")
                         .filters(
                                 f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
-                                        .filter(headerFilter.apply(new HeaderFilter.Config()))
+                                        .filter(authorizationTokenFilter.apply(new AuthorizationTokenFilter.Config()))
                                         .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
                                         .circuitBreaker(
                                                 c -> c.setName("myCircuitBreaker")
@@ -184,9 +191,6 @@ public class CloudConfig {
                 ).route(r -> r.path("/cocoin/**")
                         .filters(
                                 f -> f.filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
-                                        .filter(headerFilter.apply(new HeaderFilter.Config()))
-                                        .filter(authorizationTokenFilter.apply(new AuthorizationTokenFilter.Config()))
-                                        .filter(authorizationHeaderFilter.apply(new AuthorizationHeaderFilter.Config()))
                                         .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
                                         .circuitBreaker(
                                                 c -> c.setName("myCircuitBreaker")
@@ -204,6 +208,14 @@ public class CloudConfig {
 //                        )
 //                        .uri(serverUrlServiceBatch)
 //                )
+                .route("service-batch-webhook-loadbalanced", r -> r.path("/service/batch/webhook", "/service/batch/webhook/**")
+                        .filters(f -> f
+                                .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
+                                .filter(postLoggingFilter.apply(new PostLoggingFilter.Config()))
+                                .setRequestHeader(AUTH_HEADER, "second")
+                        )
+                        .uri(LB_SERVICE_BATCH)
+                )
                 .route("service-batch-loadbalanced", r -> r.path("/service/batch/**")
                         .filters(f -> f
                                 .filter(preLoggingFilter.apply(new PreLoggingFilter.Config()))
@@ -211,7 +223,7 @@ public class CloudConfig {
                                 .setRequestHeader(AUTH_HEADER, "second")
                                 .circuitBreaker(c -> c
                                         .setName("serviceBatchCircuitBreaker")
-                                        .setStatusCodes(fallbackStatusCodes)
+                                        .setStatusCodes(serviceBatchFallbackStatusCodes)
                                         .setFallbackUri("forward:/fallback/service-batch")
                                 )
                                 .retry(retryConfig -> retryConfig
@@ -223,7 +235,7 @@ public class CloudConfig {
                         .uri(LB_SERVICE_BATCH) // 로드밸런서 URI 사용
                 )
                 // 백업 라우트: fallback 진입 시 동일 경로를 백업 클러스터로 전달
-                .route("service-batch-backup-loadbalanced", r -> r.path("/fallback/service-batch/**")
+                .route("service-batch-backup-loadbalanced", r -> r.path("/fallback/service-batch", "/fallback/service-batch/**")
                         .filters(f -> f
                                 .rewritePath("/fallback/service-batch(?<segment>/?.*)", "/service/batch${segment}") // 원래 서비스 경로로 정규화
                                 .setRequestHeader("X-Fallback-Routed", "true")

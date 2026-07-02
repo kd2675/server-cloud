@@ -78,7 +78,7 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
     }
 
     @Test
-    @DisplayName("건강하지 않은 인스턴스들 - Eureka Fallback 동작")
+    @DisplayName("건강하지 않은 primary 인스턴스들 - backup Fallback 동작")
     void testGetWithUnhealthyInstancesFallback() {
         // Given - 모든 인스턴스가 건강하지 않음
         Map<String, Object> unhealthyData = createHealthData(false);
@@ -89,14 +89,41 @@ class FallbackBehaviorTest extends WeightedMetricsTestBase {
         // When
         Flux<List<ServiceInstance>> result = supplier.get();
 
-        // Then - 건강한 인스턴스 없음 -> Eureka에서 3개 조회
+        // Then - 건강한 primary 인스턴스 없음 -> service-batch-backup 조회
         StepVerifier.create(result)
                 .expectNextMatches(instances -> {
-                    // Eureka Mock이 3개 반환
-                    assertThat(instances).hasSize(3);
-                    assertThat(instances.stream()
-                            .allMatch(inst -> inst.getServiceId().equals("service-batch")))
-                            .isTrue();
+                    assertThat(instances).hasSize(1);
+                    ServiceInstance backup = instances.get(0);
+                    assertThat(backup.getServiceId()).isEqualTo("service-batch-backup");
+                    assertThat(backup.getInstanceId()).isEqualTo("service-batch-backup-1");
+                    assertThat(backup.getPort()).isEqualTo(8084);
+                    return true;
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("backup 인스턴스는 supplier 생성 이후 Eureka 변경을 반영한다")
+    void testBackupInstancesAreResolvedDynamically() {
+        // Given - supplier 생성 이후 backup 인스턴스가 바뀌는 상황
+        Map<String, Object> unhealthyData = createHealthData(false);
+
+        when(reactiveValueOperations.get(anyString()))
+                .thenReturn(Mono.just(unhealthyData));
+        when(discoveryClient.getInstances("service-batch-backup"))
+                .thenReturn(List.of(createInstance("service-batch-backup", "service-batch-backup-new", "localhost", 8090)));
+
+        // When
+        Flux<List<ServiceInstance>> result = supplier.get();
+
+        // Then
+        StepVerifier.create(result)
+                .expectNextMatches(instances -> {
+                    assertThat(instances).hasSize(1);
+                    ServiceInstance backup = instances.get(0);
+                    assertThat(backup.getServiceId()).isEqualTo("service-batch-backup");
+                    assertThat(backup.getInstanceId()).isEqualTo("service-batch-backup-new");
+                    assertThat(backup.getPort()).isEqualTo(8090);
                     return true;
                 })
                 .verifyComplete();

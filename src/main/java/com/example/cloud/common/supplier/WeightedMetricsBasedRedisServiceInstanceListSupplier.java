@@ -468,15 +468,15 @@ public class WeightedMetricsBasedRedisServiceInstanceListSupplier implements Ext
                         }
                     })
                     .cast(Map.class)
-                    .map(healthData -> {
+                    .flatMap(healthData -> {
                         Boolean isHealthy = (Boolean) healthData.get("isHealthy");
                         if (Boolean.TRUE.equals(isHealthy)) {
                             instance.isHealthy.set(true);
-                            return instance;
+                            return Mono.just(instance);
                         }
-                        return null;
+                        instance.isHealthy.set(false);
+                        return Mono.empty();
                     })
-                    .filter(Objects::nonNull) // null 값 필터링
                     .switchIfEmpty(Mono.defer(() -> {
                         // 건강하지 않거나 데이터가 없는 경우
                         log.warn("Redis에서 헬스 데이터 없음 ({}), 로컬 상태 사용", instance.getInstanceId());

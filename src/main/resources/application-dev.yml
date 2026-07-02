@@ -18,20 +18,20 @@ path:
       url: http://kimd0.iptime.org:20200
     batch:
       host: kimd0.iptime.org
-      port: 20260
-      url: http://kimd0.iptime.org:20260
+      port: 20290
+      url: http://kimd0.iptime.org:20290
     file:
-      host: kimd0.iptime.org
-      port: 20270
-      url: http://kimd0.iptime.org:20270
-    socket:
       host: kimd0.iptime.org
       port: 20280
       url: http://kimd0.iptime.org:20280
+    socket:
+      host: kimd0.iptime.org
+      port: 20270
+      url: http://kimd0.iptime.org:20270
     member:
       host: kimd0.iptime.org
-      port: 20290
-      url: http://kimd0.iptime.org:20290
+      port: 20260
+      url: http://kimd0.iptime.org:20260
   service:
     batch:
       host: kimd0.iptime.org

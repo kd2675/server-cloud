@@ -334,17 +334,18 @@ public class MetricsBasedRedisServiceInstanceListSupplier implements ServiceInst
         return reactiveRedisTemplate.opsForValue()
                 .get(healthKey)
                 .cast(Map.class)
-                .map(healthData -> {
+                .flatMap(healthData -> {
                     Boolean isHealthy = (Boolean) healthData.get("isHealthy");
                     if (Boolean.TRUE.equals(isHealthy)) {
                         instance.isHealthy.set(true);
-                        return instance;
+                        return Mono.just(instance);
                     }
-                    return null;
+                    instance.isHealthy.set(false);
+                    return Mono.empty();
                 })
-                .switchIfEmpty(Mono.fromSupplier(() -> {
+                .switchIfEmpty(Mono.defer(() -> {
                     // Redis에 데이터가 없으면 로컬 상태 사용
-                    return instance.isHealthy.get() ? instance : null;
+                    return instance.isHealthy.get() ? Mono.just(instance) : Mono.empty();
                 }))
                 .onErrorResume(error -> {
                     log.error("Redis에서 헬스 상태 조회 실패 ({}): {}", instance.getInstanceId(), error.getMessage());
